@@ -46,7 +46,7 @@ Jobs are submitted to a Spark Standalone cluster as a JAR file. In order to exer
 
 ```bash
 $ docker-compose \
-    -f docker-compose.spark.yml run --rm --entrypoint ./sbt \
+    -f docker-compose.spark.yml run --rm --no-deps --user root --entrypoint ./sbt \
     spark-driver package
 ```
 
