@@ -40,6 +40,8 @@ A Spark Standalone cluster can have one or more workers within a cluster, and ea
 
 The local development environment for Raster Foundry contains a Docker Compose configuration for running a Spark Standalone cluster. All services within the Docker Compose configuration share a common base image (only the **master** builds on that slightly to prepare the cluster state directory for recovery).
 
+**Note**: It is recommended that you execute the commands in each of the sections below in separate terminal windows so that you can inspect the output interactively as the state of the cluster changes.
+
 ### Building a Job JAR
 
 Jobs are submitted to a Spark Standalone cluster as a JAR file. In order to exercise the cluster, this repository contains a `SparkPi` job that can be compiled into a JAR with:
