@@ -60,7 +60,7 @@ To get the Spark Standalone environment up-and-running, build the **master** con
 $ docker-compose -f docker-compose.spark.yml build
 ```
 
-Next, bring up the Spark master:
+Next, bring up the Spark master, which provides a web console on port `8888`:
 
 ```bash
 $ docker-compose -f docker-compose.spark.yml up spark-master
