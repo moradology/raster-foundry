@@ -9,9 +9,11 @@ services:
     restart: always
     ports:
       - "7077:7077"
-      - "8888:8080"
+      - "8888:8888"
     environment:
       SPARK_LOCAL_DIRS: "/tmp"
+      SPARK_PUBLIC_DNS: "localhost"
+      SPARK_MASTER_WEBUI_PORT: "8888"
       SPARK_DAEMON_MEMORY: "256m"
       SPARK_DAEMON_JAVA_OPTS: "-Dspark.deploy.recoveryMode=FILESYSTEM -Dspark.deploy.recoveryDirectory=/spark-state"
     volumes:
@@ -26,8 +28,12 @@ services:
     image: quay.io/azavea/spark:1.6.2
     links:
       - spark-master:spark.services.rf.internal
+    ports:
+      - "8889:8889"
     environment:
       SPARK_LOCAL_DIRS: "/tmp"
+      SPARK_PUBLIC_DNS: "localhost"
+      SPARK_WORKER_WEBUI_PORT: "8889"
       SPARK_WORKER_MEMORY: "512m"
       SPARK_DAEMON_MEMORY: "512m"
     volumes:
