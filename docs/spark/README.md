@@ -14,6 +14,7 @@ Raster Foundry uses both to mosaic multiple large raster data sets and output th
 * [Development Environment](#development-environment)
   * [Building a Job JAR](#building-a-job-jar)
   * [Local Spark Standalone Cluster](#local-spark-standalone-cluster)
+* [Safety Testing](#safety-testing)
 
 ## Spark Components
 
@@ -124,3 +125,50 @@ $ docker-compose \
         target/scala-2.11/rf-worker_2.11-0.1.0.jar 1000
 ```
 
+## Safety Testing
+
+Using the development environment described above, each Spark Standalone component was terminated using `SIGINT` in an attempt to simulate hard failures. Below are a collection of notes on how the Spark Standalone cluster behaved after each component termination.
+
+<table>
+    <tbody>
+        <tr>
+            <th>Component</th>
+            <th>Application Status</th>
+            <th>Notes</th>
+        </tr>
+        <tr>
+            <td><b>Master</b></td>
+            <td><code>FINISHED</code></td>
+            <td>
+                <ul>
+                    <li><b>Worker</b> re-registered with <b>master</b></li>
+                    <li>Application re-registered with <b>master</b></li>
+                </ul>
+            </td>
+        </tr>
+        <tr>
+            <td><b>Worker</b></td>
+            <td><code>FAILED</code></td>
+            <td>
+                <ul>
+                    <li><b>Master</b> told application that <b>executor</b> was lost</li>
+                    <li><b>Worker</b> re-registered with <b>master</b>; replacement <b>executor</b> launched</li>
+                    <li><b>Driver</b> not able to interact with replacement <b>executor</b></li>
+                    <li><b>Driver</b> not able to make progress with existing <b>executor</b></li>
+                    <li>Possibly related to <a target="_blank" href="https://issues.apache.org/jira/browse/SPARK-16533">SPARK-16533</a> and <a target="_blank" href="https://issues.apache.org/jira/browse/SPARK-16702">SPARK-16702</a></li>
+                </ul>
+            </td>
+        </tr>
+        <tr>
+            <td><b>Driver</b></td>
+            <td><code>FAILED</code></td>
+            <td>
+                <ul>
+                    <li><b>Master</b> received unregister request from application</li>
+                    <li><b>Worker</b> killed <b>executor</b> that was executing tasks</li>
+                    <li><b>Worker</b> disassociation with task propagated to <b>master</b></li>
+                </ul>
+            </td>
+        </tr>
+    </tbody>
+</table>
