@@ -48,6 +48,7 @@ services:
       - spark-master:spark.services.rf.internal
     environment:
       SPARK_LOCAL_DIRS: "/tmp"
+      SPARK_PUBLIC_DNS: "localhost"
       SPARK_DRIVER_MEMORY: "512m"
       SPARK_EXECUTOR_MEMORY: "512m"
     volumes:

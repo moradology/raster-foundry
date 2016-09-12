@@ -117,7 +117,7 @@ Lastly, submit the `SparkPi` JAR created in the section above to the cluster:
 
 ```bash
 $ docker-compose \
-    -f docker-compose.spark.yml run --rm \
+    -f docker-compose.spark.yml run --rm -p 4040:4040 \
     spark-driver \
         --class "com.rasterfoundry.worker.SparkPi" \
         --master spark://spark.services.rf.internal:7077 \
