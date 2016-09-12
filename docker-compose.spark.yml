@@ -28,8 +28,6 @@ services:
     image: quay.io/azavea/spark:1.6.2
     links:
       - spark-master:spark.services.rf.internal
-    ports:
-      - "8889:8889"
     environment:
       SPARK_LOCAL_DIRS: "/tmp"
       SPARK_PUBLIC_DNS: "localhost"
