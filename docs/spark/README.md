@@ -10,6 +10,7 @@ Raster Foundry uses both to mosaic multiple large raster data sets and output th
   * [Master](#master)
   * [Worker](#workers-and-executors)
   * [Driver](#driver)
+* [Master Recovery](#master-recovery)
 * [Development Environment](#development-environment)
   * [Building a Job JAR](#building-a-job-jar)
   * [Local Spark Standalone Cluster](#local-spark-standalone-cluster)
@@ -35,6 +36,10 @@ There is generally only one master in a Spark Standalone cluster, but when multi
 Workers within a Spark Standalone cluster interact with the **master** to determine what jobs they can do. Within a **worker** exist **executors**, and executors work on tasks within the jobs assigned to a worker. They also communicate task status back to the **driver**.
 
 A Spark Standalone cluster can have one or more workers within a cluster, and each worker can have one or more executors (generally limited to the number of CPUs available on the worker).
+
+## Master Recovery
+
+A Spark Standalone **master** has several supported `spark.deploy.recoveryMode` options. Within the local development environment `FILESYSTEM` is used. This mode instructs the master to log information about **workers** to the file system (`spark.deploy.recoveryDirectory`) when they register. The information logged allows the master to recover from a failure given that the `recoveryDirectory` is still intact.
 
 ## Development Environment
 
@@ -119,6 +124,3 @@ $ docker-compose \
         target/scala-2.11/rf-worker_2.11-0.1.0.jar 1000
 ```
 
-## Master Recovery
-
-A Spark Standalone **master** has several supported `spark.deploy.recoveryMode` options. Within the local development environment `FILESYSTEM` is used. This mode instructs the master to log information about **workers** to the file system (`spark.deploy.recoveryDirectory`) when they register. The information logged allows the master to recover from a failure given that the `recoveryDirectory` is still intact.
