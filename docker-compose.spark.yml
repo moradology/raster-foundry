@@ -5,7 +5,7 @@ services:
     build:
       context: ./worker-tasks
       dockerfile: Dockerfile
-    image: quay.io/azavea/spark:1.6.2
+    image: quay.io/azavea/spark:2.0.0
     restart: always
     ports:
       - "7077:7077"
@@ -25,7 +25,7 @@ services:
     command: org.apache.spark.deploy.master.Master
 
   spark-worker:
-    image: quay.io/azavea/spark:1.6.2
+    image: quay.io/azavea/spark:2.0.0
     links:
       - spark-master:spark.services.rf.internal
     environment:
@@ -43,7 +43,7 @@ services:
       - "spark://spark.services.rf.internal:7077"
 
   spark-driver:
-    image: quay.io/azavea/spark:1.6.2
+    image: quay.io/azavea/spark:2.0.0
     links:
       - spark-master:spark.services.rf.internal
     environment:
