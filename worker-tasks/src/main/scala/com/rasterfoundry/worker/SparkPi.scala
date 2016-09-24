@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 
-// scalastyle:off println
 package com.rasterfoundry.worker
 
 import scala.math.random
@@ -38,4 +37,3 @@ object SparkPi {
     spark.stop()
   }
 }
-// scalastyle:on println
