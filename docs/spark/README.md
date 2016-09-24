@@ -54,7 +54,7 @@ Jobs are submitted to a Spark Standalone cluster as a JAR file. In order to exer
 
 ```bash
 $ docker-compose \
-    -f docker-compose.spark.yml run --rm --no-deps --user root --entrypoint ./sbt \
+    -f docker-compose.spark.yml run --rm --no-deps --user root --entrypoint sbt \
     spark-driver package
 ```
 
@@ -62,13 +62,7 @@ That process will produce `rf-worker_2.11-0.1.0.jar` inside of the `target/scala
 
 ### Local Spark Standalone Cluster
 
-To get the Spark Standalone environment up-and-running, build the **master** container image:
-
-```bash
-$ docker-compose -f docker-compose.spark.yml build
-```
-
-Next, bring up the Spark master, which provides a web console on port `8888`:
+To get the Spark Standalone environment up-and-running, start by bring up the Spark **master**. It provides a web console on port `8888`:
 
 ```bash
 $ docker-compose -f docker-compose.spark.yml up spark-master
