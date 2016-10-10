@@ -142,14 +142,11 @@ Using the development environment described above, each Spark Standalone compone
         </tr>
         <tr>
             <td><b>Worker</b></td>
-            <td><code>FAILED</code></td>
+            <td><code>FINISHED</code></td>
             <td>
                 <ul>
                     <li><b>Master</b> told application that <b>executor</b> was lost</li>
                     <li><b>Worker</b> re-registered with <b>master</b>; replacement <b>executor</b> launched</li>
-                    <li><b>Driver</b> not able to interact with replacement <b>executor</b></li>
-                    <li><b>Driver</b> not able to make progress with existing <b>executor</b></li>
-                    <li>Possibly related to <a target="_blank" href="https://issues.apache.org/jira/browse/SPARK-16533">SPARK-16533</a> and <a target="_blank" href="https://issues.apache.org/jira/browse/SPARK-16702">SPARK-16702</a></li>
                 </ul>
             </td>
         </tr>

@@ -1,4 +1,4 @@
-FROM quay.io/azavea/spark:2.0.0
+FROM quay.io/azavea/spark:2.0.1
 
 USER root
 
