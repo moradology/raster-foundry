@@ -52,6 +52,22 @@ trait TokenRoutes extends Authentication
             }
           }
         }
+      } ~
+      path(".*".r) { deviceId =>
+        delete {
+          authenticate { user =>
+            // TODO Check that the deviceId belongs to user before deleting it!
+            // Otherwise any authenticated user will be able to delete any
+            // device key, whether or not they own it.
+
+            val devicePath = s"$uri/$deviceId"
+            val req = Http().singleRequest(HttpRequest(DELETE, devicePath, headers))
+
+            onSuccess(req) {
+              case HttpResponse(resCode, _, _, _) => complete(resCode)
+            }
+          }
+        }
       }
     }
   }
