@@ -1,44 +1,34 @@
 package com.azavea.rf.database.tables
 
-import com.azavea.rf.database.fields.{SceneFields, OrganizationFkFields, UserFkFields, TimestampFields}
 import com.azavea.rf.database.query._
-import com.azavea.rf.database.sort._
-import com.azavea.rf.database.{Database => DB, _}
+import com.azavea.rf.database.{Database => DB}
 import com.azavea.rf.database.ExtendedPostgresDriver.api._
 import com.azavea.rf.datamodel._
 import java.util.UUID
 import java.sql.Timestamp
 import geotrellis.slick.Projected
 import geotrellis.vector.{Point, Polygon, Geometry}
-import scala.concurrent.Future
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.{Future, ExecutionContext}
+import scala.util.{Try, Success, Failure}
 import com.typesafe.scalalogging.LazyLogging
 import com.lonelyplanet.akka.http.extensions.{PageRequest, Order}
 
-
 /** Table description of table scenes. Objects of this class serve as prototypes for rows in queries. */
 class Scenes(_tableTag: Tag) extends Table[Scene](_tableTag, "scenes")
-                                     with SceneFields
-                                     with OrganizationFkFields
-                                     with UserFkFields
-                                     with TimestampFields
+                                     with HasOrganizationFK
+                                     with HasUserFK
+                                     with HasTimestamp
 {
-  def * = (id, createdAt, createdBy, modifiedAt, modifiedBy, organizationId, ingestSizeBytes, visibility,
-    resolutionMeters, tags, datasource, sceneMetadata, cloudCover, acquisitionDate, thumbnailStatus, boundaryStatus,
-    status, sunAzimuth, sunElevation, name, footprint) <> (Scene.tupled, Scene.unapply)
+  def * = (id, createdAt, modifiedAt, organizationId, createdBy, modifiedBy, ingestSizeBytes, visibility, resolutionMeters, tags, datasource, sceneMetadata, cloudCover, acquisitionDate, thumbnailStatus, boundaryStatus, status, sunAzimuth, sunElevation, name, footprint) <> (Scene.tupled, Scene.unapply)
   /** Maps whole row to an option. Useful for outer joins. */
-  def ? = (Rep.Some(id), Rep.Some(createdAt), Rep.Some(createdBy), Rep.Some(modifiedAt), Rep.Some(modifiedBy),
-    Rep.Some(organizationId), Rep.Some(ingestSizeBytes), Rep.Some(visibility), Rep.Some(resolutionMeters),
-    Rep.Some(tags), Rep.Some(datasource), Rep.Some(sceneMetadata), cloudCover, acquisitionDate,
-    Rep.Some(thumbnailStatus), Rep.Some(boundaryStatus), Rep.Some(status), sunAzimuth, sunElevation, Rep.Some(name),
-    footprint).shaped.<>({r=> import r._;_1.map(_=> Scene.tupled((_1.get, _2.get, _3.get, _4.get, _5.get, _6.get, _7.get, _8.get, _9.get, _10.get, _11.get, _12.get, _13, _14, _15.get, _16.get, _17.get, _18, _19, _20.get, _21)))}, (_:Any) =>  throw new Exception("Inserting into ? projection not supported."))
+  def ? = (Rep.Some(id), Rep.Some(createdAt), Rep.Some(modifiedAt), Rep.Some(organizationId), Rep.Some(createdBy), Rep.Some(modifiedBy), Rep.Some(ingestSizeBytes), Rep.Some(visibility), Rep.Some(resolutionMeters), Rep.Some(tags), Rep.Some(datasource), Rep.Some(sceneMetadata), cloudCover, acquisitionDate, Rep.Some(thumbnailStatus), Rep.Some(boundaryStatus), Rep.Some(status), sunAzimuth, sunElevation, Rep.Some(name), footprint).shaped.<>({r=>import r._; _1.map(_=> Scene.tupled((_1.get, _2.get, _3.get, _4.get, _5.get, _6.get, _7.get, _8.get, _9.get, _10.get, _11.get, _12.get, _13, _14, _15.get, _16.get, _17.get, _18, _19, _20.get, _21)))}, (_:Any) =>  throw new Exception("Inserting into ? projection not supported."))
 
   val id: Rep[java.util.UUID] = column[java.util.UUID]("id", O.PrimaryKey)
   val createdAt: Rep[java.sql.Timestamp] = column[java.sql.Timestamp]("created_at")
-  val createdBy: Rep[String] = column[String]("created_by", O.Length(255,varying=true))
   val modifiedAt: Rep[java.sql.Timestamp] = column[java.sql.Timestamp]("modified_at")
-  val modifiedBy: Rep[String] = column[String]("modified_by", O.Length(255,varying=true))
   val organizationId: Rep[java.util.UUID] = column[java.util.UUID]("organization_id")
+  val createdBy: Rep[String] = column[String]("created_by", O.Length(255,varying=true))
+  val modifiedBy: Rep[String] = column[String]("modified_by", O.Length(255,varying=true))
   val ingestSizeBytes: Rep[Int] = column[Int]("ingest_size_bytes")
   val visibility: Rep[Visibility] = column[Visibility]("visibility")
   val resolutionMeters: Rep[Float] = column[Float]("resolution_meters")
@@ -66,22 +56,9 @@ class Scenes(_tableTag: Tag) extends Table[Scene](_tableTag, "scenes")
 
 /** Collection-like TableQuery object for table Scenes */
 object Scenes extends TableQuery(tag => new Scenes(tag)) with LazyLogging {
-  type TableQuery = Query[Scenes, Scene, Seq]
-  type JoinQuery = Query[ScenesWithRelatedFields, (Scene, Option[Image], Option[Thumbnail]), Seq]
-  type ScenesWithRelatedFields = (Scenes, Rep[Option[Images]], Rep[Option[Thumbnails]])
 
-  implicit val scenesSorter: QuerySorter[Scenes] =
-    new QuerySorter(
-      new SceneFieldsSort(identity[Scenes]),
-      new OrganizationFkSort(identity[Scenes]),
-      new TimestampSort(identity[Scenes]))
-
-  implicit val scenesWithRelatedSorter: QuerySorter[ScenesWithRelatedFields] =
-    new QuerySorter(
-      new SceneFieldsSort(_._1),
-      new OrganizationFkSort(_._1),
-      new TimestampSort(_._1))
-
+  type TableQuery = Query[Scenes, Scenes#TableElementType, Seq]
+  type JoinQuery = Query[(Scenes, Rep[Option[Images]], Rep[Option[Thumbnails]]),(Scene, Option[Image], Option[Thumbnail]), Seq]
 
   implicit class withScenesTableQuery[M, U, C[_]](scenes: Scenes.TableQuery) extends
       ScenesTableQuery[M, U, C](scenes)
@@ -93,62 +70,99 @@ object Scenes extends TableQuery(tag => new Scenes(tag)) with LazyLogging {
 
   /** Insert a scene into the database
     *
-    * @param sceneCreate scene to create
+    * @param scene CreateScene scene to create
     * @param user User user creating scene
     *
     * This implementation allows a user to post a scene with thumbnails, footprint, and
     * images which are all created in a single transaction
     */
-  def insertScene(sceneCreate: Scene.Create, user: User)
-    (implicit database: DB): Future[Scene.WithRelated] = {
+  def insertScene(ss: CreateScene, user: User)
+    (implicit database: DB, ec: ExecutionContext): Future[Try[SceneWithRelated]] = {
 
-    val scene = sceneCreate.toScene(user.id)
-    val thumbnails = sceneCreate.thumbnails.map(_.toThumbnail(user.id, scene))
-    val images = sceneCreate.images.map(_.toImage(user.id, scene))
+    val scene = ss.toScene(user.id)
+    val scenesRowInsert = Scenes.forceInsert(scene)
 
-    val actions = Scenes.forceInsert(scene)
-      .andThen(DBIO.seq(thumbnails.map(Thumbnails.forceInsert): _*))
-      .andThen(DBIO.seq(images.map(Images.forceInsert): _*))
+    val thumbnails = ss.thumbnails.map(_.toThumbnail(user.id, scene))
+    val thumbnailsInsert = DBIO.seq(thumbnails.map(Thumbnails.forceInsert): _*)
+
+    val images = ss.images.map(_.toImage(user.id, scene))
+    val imagesInsert = DBIO.seq(images.map(Images.forceInsert): _*)
+
+    val sceneInsert = (for {
+      _ <- scenesRowInsert
+      _ <- thumbnailsInsert
+      _ <- imagesInsert
+    } yield ()).transactionally
 
     database.db.run {
-      actions.transactionally
-    } map { x =>
-      scene.withRelatedFromComponents(images, thumbnails)
+      sceneInsert.asTry
+    } map {
+      case Success(_) => Success(
+        SceneWithRelated.fromComponents(scene, images, thumbnails)
+      )
+      case Failure(e) => {
+        logger.error(e.toString)
+        Failure(e)
+      }
     }
   }
 
+  /** Helper function to create Iterable[SceneWithRelated] from join
+    *
+    * It is necessary to map over the distinct scenes because that is the only way to
+    * ensure that the sort order of the query result remains ordered after grouping
+    *
+    * @param joinResult result of join query to return scene with related
+    * information
+    */
+  def createScenesWithRelated(joinResult: Seq[(Scene, Option[Image], Option[Thumbnail])]): Iterable[SceneWithRelated] = {
+
+    val distinctScenes = joinResult.map(_._1).distinct
+    val grouped = joinResult.groupBy(_._1)
+    distinctScenes.map{scene =>
+      // This should be relatively safe since scene is the key grouped by
+      val (seqImages, seqThumbnails) = grouped(scene)
+        .map{ case (sr, im, th) => (im, th)}
+        .unzip
+      SceneWithRelated.fromComponents(
+        scene, seqImages.flatten, seqThumbnails.flatten.distinct
+      )
+    }
+  }
 
   /** Retrieve a single scene from the database
     *
     * @param sceneId java.util.UUID ID of scene to query with
     */
-  def getScene(sceneId: UUID)
-    (implicit database: DB): Future[Option[Scene.WithRelated]] = {
+  def getScene(sceneId: java.util.UUID)
+    (implicit database: DB, ec: ExecutionContext): Future[Option[SceneWithRelated]] = {
+    val sceneJoinQuery = Scenes
+      .filter(_.id === sceneId)
+      .joinWithRelated
 
     database.db.run {
-      val action = Scenes
-        .filter(_.id === sceneId)
-        .joinWithRelated
-        .result
+      val action = sceneJoinQuery.result
       logger.debug(s"Total Query for scenes -- SQL: ${action.statements.headOption}")
       action
-    } map { joinQuery =>
-      Scene.WithRelated.fromRecords(joinQuery).headOption
+    } map { join =>
+      val scenesWithRelated = createScenesWithRelated(join)
+      scenesWithRelated.headOption
     }
   }
 
   /** Get scenes given a page request and query parameters */
   def getScenes(pageRequest: PageRequest, combinedParams: CombinedSceneQueryParams)
-    (implicit database: DB): Future[PaginatedResponse[Scene.WithRelated]] = {
+    (implicit database: DB, ec: ExecutionContext): Future[PaginatedResponse[SceneWithRelated]] = {
+
+    val pagedScenes = Scenes
+      .joinWithRelated
+      .page(combinedParams, pageRequest)
 
     val scenesQueryResult = database.db.run {
-      val action = Scenes
-          .joinWithRelated
-          .page(combinedParams, pageRequest)
-          .result
+      val action = pagedScenes.result
       logger.debug(s"Paginated Query for scenes -- SQL: ${action.statements.headOption}")
       action
-    } map { Scene.WithRelated.fromRecords }
+    } map(join => createScenesWithRelated(join))
 
     val totalScenesQueryResult = database.db.run {
       val action = Scenes
@@ -178,7 +192,7 @@ object Scenes extends TableQuery(tag => new Scenes(tag)) with LazyLogging {
     *
     * @param sceneId java.util.UUID ID of scene to delete
     */
-  def deleteScene(sceneId: UUID)(implicit database: DB): Future[Int] = {
+  def deleteScene(sceneId: UUID)(implicit database: DB, ec: ExecutionContext): Future[Int] = {
     database.db.run {
       Scenes.filter(_.id === sceneId).delete
     }
@@ -194,9 +208,9 @@ object Scenes extends TableQuery(tag => new Scenes(tag)) with LazyLogging {
     * @param user User user performing the update
     */
   def updateScene(scene: Scene, sceneId: UUID, user: User)
-    (implicit database: DB): Future[Int] = {
+    (implicit database: DB, ec: ExecutionContext): Future[Try[Int]] = {
 
-    val updateTime = new Timestamp((new java.util.Date).getTime)
+    val updateTime = new Timestamp((new java.util.Date()).getTime())
 
     val updateSceneQuery = for {
       updateScene <- Scenes.filter(_.id === sceneId)
@@ -211,10 +225,15 @@ object Scenes extends TableQuery(tag => new Scenes(tag)) with LazyLogging {
         updateTime, user.id, scene.ingestSizeBytes, scene.resolutionMeters,
         scene.datasource, scene.cloudCover, scene.acquisitionDate, scene.tags, scene.sceneMetadata,
         scene.thumbnailStatus, scene.boundaryStatus, scene.status, scene.name, scene.footprint
-      ))
+      )).asTry
     } map {
-      case 1 => 1
-      case _ => throw new IllegalStateException("Error while updating scene")
+      case Success(result) => {
+        result match {
+          case 1 => Success(1)
+          case _ => Failure(new Exception("Error while updating scene"))
+        }
+      }
+      case Failure(e) => Failure(e)
     }
   }
 }
@@ -234,8 +253,31 @@ class ScenesTableQuery[M, U, C[_]](scenes: Scenes.TableQuery) {
         sceneParams.maxSunAzimuth.map(scene.sunAzimuth < _),
         sceneParams.minSunElevation.map(scene.sunElevation > _),
         sceneParams.maxSunElevation.map(scene.sunElevation < _),
-        sceneParams.bboxPolygon.map(scene.footprint.intersects(_)),
-        sceneParams.pointGeom.map(scene.footprint.intersects(_))
+        sceneParams.bbox.map { bboxString =>
+          val (xmin, ymin, xmax, ymax) = bboxString.split(",") match {
+            case Array(xmin, ymin, xmax, ymax) =>
+              (xmin.toDouble, ymin.toDouble, xmax.toDouble, ymax.toDouble)
+            case _ => throw new IllegalArgumentException(
+              "Four comma separated coordinates must be given"
+            )
+
+          }
+          val p1 = Point(xmin, ymin)
+          val p2 = Point(xmax, ymin)
+          val p3 = Point(xmax, ymax)
+          val p4 = Point(xmin, ymax)
+          val bbox = Projected(Polygon(Seq(p1,p2,p3,p4,p1)), 3857)
+          scene.footprint.intersects(bbox)
+        },
+        sceneParams.point.map { pointString =>
+          val pt = pointString.split(",") match {
+            case Array(x, y) => Projected(Point(x.toDouble, y.toDouble), 3857)
+            case _ => throw new IllegalArgumentException(
+              "Both coordinate parameters (x, y) must be specified"
+            )
+          }
+          scene.footprint.intersects(pt)
+        }
       )
       sceneFilterConditions
         .collect({case Some(criteria)  => criteria})
@@ -254,18 +296,80 @@ class ScenesTableQuery[M, U, C[_]](scenes: Scenes.TableQuery) {
     }
   }
 
-  /** Return a join query for scenes */
-  def joinWithRelated: Scenes.JoinQuery = {
+  /** Return a join query for scenes
+   *
+   * @sceneQuery ScenesQuery base scenes query
+   */
+  def joinWithRelated = {
     for {
       ((scene, image), thumbnail) <-
       (scenes
          joinLeft Images on (_.id === _.scene)
          joinLeft Thumbnails on (_._1.id === _.scene))
-    } yield (scene, image, thumbnail)
+    } yield( scene, image, thumbnail )
+  }
+
+  def sort(sortMap: Map[String, Order]): Scenes.TableQuery = {
+    def applySort(query: Scenes.TableQuery, sortMap: Map[String, Order]): Scenes.TableQuery = {
+      sortMap.headOption match {
+        case Some(("createdAt", Order.Asc)) => applySort(query.sortBy(_.createdAt.asc),
+                                                         sortMap.tail)
+        case Some(("createdAt", Order.Desc)) => applySort(query.sortBy(_.createdAt.desc),
+                                                          sortMap.tail)
+
+        case Some(("modifiedAt", Order.Asc)) => applySort(query.sortBy(_.modifiedAt.asc),
+                                                          sortMap.tail)
+        case Some(("modifiedAt", Order.Desc)) => applySort(query.sortBy(_.modifiedAt.desc),
+                                                           sortMap.tail)
+
+        case Some(("organization", Order.Asc)) => applySort(query.sortBy(_.organizationId.asc),
+                                                            sortMap.tail)
+        case Some(("organization", Order.Desc)) => applySort(query.sortBy(_.organizationId.desc),
+                                                             sortMap.tail)
+
+        case Some(("datasource", Order.Asc)) => applySort(query.sortBy(_.datasource.asc),
+                                                          sortMap.tail)
+        case Some(("datasource", Order.Desc)) => applySort(query.sortBy(_.datasource.desc),
+                                                           sortMap.tail)
+
+        case Some(("month", Order.Asc)) => applySort(query.sortBy { join =>
+                                                       datePart("month", join.acquisitionDate).asc
+                                                     }, sortMap.tail)
+        case Some(("month", Order.Desc)) => applySort(query.sortBy { join =>
+                                                        datePart("month", join.acquisitionDate).desc
+                                                      }, sortMap.tail)
+
+        case Some(("acquisitionDatetime", Order.Asc)) => applySort(
+          query.sortBy(_.acquisitionDate.asc), sortMap.tail)
+        case Some(("acquisitionDatetime", Order.Desc)) => applySort(
+          query.sortBy(_.acquisitionDate.desc), sortMap.tail)
+
+        case Some(("sunAzimuth", Order.Asc)) => applySort(query.sortBy(_.sunAzimuth.asc),
+                                                          sortMap.tail)
+        case Some(("sunAzimuth", Order.Desc)) => applySort(query.sortBy(_.sunAzimuth.desc),
+                                                           sortMap.tail)
+
+        case Some(("sunElevation", Order.Asc)) => applySort(query.sortBy(_.sunElevation.asc),
+                                                            sortMap.tail)
+        case Some(("sunElevation", Order.Desc)) => applySort(query.sortBy(_.sunElevation.desc),
+                                                             sortMap.tail)
+
+        case Some(("cloudCover", Order.Asc)) => applySort(query.sortBy(_.cloudCover.asc),
+                                                          sortMap.tail)
+        case Some(("cloudCover", Order.Desc)) => applySort(query.sortBy(_.cloudCover.desc),
+                                                           sortMap.tail)
+
+        case Some(_) => applySort(query, sortMap.tail)
+        case _ => query
+      }
+    }
+    applySort(scenes, sortMap)
   }
 }
 
 class ScenesJoinQuery[M, U, C[_]](sceneJoin: Scenes.JoinQuery) {
+  import Scenes.datePart
+
   /** Handle pagination with inner join on filtered scenes
    *
    * Pagination must be handled with an inner join here because the results
@@ -290,5 +394,62 @@ class ScenesJoinQuery[M, U, C[_]](sceneJoin: Scenes.JoinQuery) {
 
     // Need to sort after the join because the join removes the sort order
     joinedResults.sort(pageRequest.sort)
+  }
+
+  def sort(sortMap: Map[String, Order]): Scenes.JoinQuery = {
+    def applySort(query: Scenes.JoinQuery, sortMap: Map[String, Order]): Scenes.JoinQuery = {
+      sortMap.headOption match {
+        case Some(("createdAt", Order.Asc)) => applySort(query.sortBy(_._1.createdAt.asc),
+                                                         sortMap.tail)
+        case Some(("createdAt", Order.Desc)) => applySort(query.sortBy(_._1.createdAt.desc),
+                                                          sortMap.tail)
+
+        case Some(("modifiedAt", Order.Asc)) => applySort(query.sortBy(_._1.modifiedAt.asc),
+                                                          sortMap.tail)
+        case Some(("modifiedAt", Order.Desc)) => applySort(query.sortBy(_._1.modifiedAt.desc),
+                                                           sortMap.tail)
+
+        case Some(("organization", Order.Asc)) => applySort(query.sortBy(_._1.organizationId.asc),
+                                                            sortMap.tail)
+        case Some(("organization", Order.Desc)) => applySort(query.sortBy(_._1.organizationId.desc),
+                                                             sortMap.tail)
+
+        case Some(("datasource", Order.Asc)) => applySort(query.sortBy(_._1.datasource.asc),
+                                                          sortMap.tail)
+        case Some(("datasource", Order.Desc)) => applySort(query.sortBy(_._1.datasource.desc),
+                                                           sortMap.tail)
+
+        case Some(("month", Order.Asc)) => applySort(query.sortBy { join =>
+                                                       datePart("month", join._1.acquisitionDate).asc
+                                                     }, sortMap.tail)
+        case Some(("month", Order.Desc)) => applySort(query.sortBy { join =>
+                                                        datePart("month", join._1.acquisitionDate).desc
+                                                      }, sortMap.tail)
+
+        case Some(("acquisitionDatetime", Order.Asc)) => applySort(
+          query.sortBy(_._1.acquisitionDate.asc), sortMap.tail)
+        case Some(("acquisitionDatetime", Order.Desc)) => applySort(
+          query.sortBy(_._1.acquisitionDate.desc), sortMap.tail)
+
+        case Some(("sunAzimuth", Order.Asc)) => applySort(query.sortBy(_._1.sunAzimuth.asc),
+                                                          sortMap.tail)
+        case Some(("sunAzimuth", Order.Desc)) => applySort(query.sortBy(_._1.sunAzimuth.desc),
+                                                           sortMap.tail)
+
+        case Some(("sunElevation", Order.Asc)) => applySort(query.sortBy(_._1.sunElevation.asc),
+                                                            sortMap.tail)
+        case Some(("sunElevation", Order.Desc)) => applySort(query.sortBy(_._1.sunElevation.desc),
+                                                             sortMap.tail)
+
+        case Some(("cloudCover", Order.Asc)) => applySort(query.sortBy(_._1.cloudCover.asc),
+                                                          sortMap.tail)
+        case Some(("cloudCover", Order.Desc)) => applySort(query.sortBy(_._1.cloudCover.desc),
+                                                           sortMap.tail)
+
+        case Some(_) => applySort(sceneJoin, sortMap.tail)
+        case _ => query
+      }
+    }
+    applySort(sceneJoin, sortMap)
   }
 }

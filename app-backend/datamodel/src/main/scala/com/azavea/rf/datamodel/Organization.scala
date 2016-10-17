@@ -1,7 +1,5 @@
 package com.azavea.rf.datamodel
 
-import spray.json._
-import DefaultJsonProtocol._
 import java.util.UUID
 import java.sql.Timestamp
 
@@ -12,28 +10,19 @@ case class Organization(
   name: String
 )
 
-object Organization {
+case class UserWithRole(id: String, role: String, createdAt: Timestamp, modifiedAt: Timestamp)
 
-  def tupled = (Organization.apply _).tupled
-
-  def create = Create.apply _
-
-  implicit val defaultOrganizationFormat = jsonFormat4(Organization.apply _)
-
-  case class WithRole(id: java.util.UUID, name: String, role: User.Role)
-  object WithRole {
-    implicit val defaultOrgRoleFormat = jsonFormat3(Organization.WithRole.apply _)
+case class UserWithRoleCreate(id: String, role: String) {
+  def toUserWithRole(): UserWithRole = {
+    val now = new Timestamp((new java.util.Date()).getTime())
+    UserWithRole(id, role, now, now)
   }
+}
 
-  case class Create(name: String) {
-    def toOrganization(): Organization = {
-      val id = java.util.UUID.randomUUID()
-      val now = new Timestamp((new java.util.Date()).getTime())
-      Organization(id, now, now, name)
-    }
-  }
-
-  object Create {
-    implicit val defaultOrganizationCreateFormat = jsonFormat1(Create.apply _)
+case class OrganizationCreate(name: String) {
+  def toOrganization(): Organization = {
+    val id = java.util.UUID.randomUUID()
+    val now = new Timestamp((new java.util.Date()).getTime())
+    Organization(id, now, now, name)
   }
 }

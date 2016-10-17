@@ -1,21 +1,18 @@
 package com.azavea.rf.datamodel
 
-import spray.json._
-import spray.json.DefaultJsonProtocol._
 import java.sql.Timestamp
 import java.util.UUID
 
-import geotrellis.vector.io.json.GeoJsonSupport
 import geotrellis.vector.Geometry
 import geotrellis.slick.Projected
 
 case class Scene(
   id: UUID,
   createdAt: java.sql.Timestamp,
-  createdBy: String,
   modifiedAt: java.sql.Timestamp,
-  modifiedBy: String,
   organizationId: UUID,
+  createdBy: String,
+  modifiedBy: String,
   ingestSizeBytes: Int,
   visibility: Visibility,
   resolutionMeters: Float,
@@ -31,148 +28,169 @@ case class Scene(
   sunElevation: Option[Float] = None,
   name: String,
   footprint: Option[Projected[Geometry]] = None
-) {
-  def toScene = this
+)
 
-  def withRelatedFromComponents(
+case class SceneWithRelated(
+  id: UUID,
+  createdBy: String,
+  modifiedBy: String,
+  createdAt: Timestamp,
+  modifiedAt: Timestamp,
+  organizationId: UUID,
+  visibility: Visibility,
+  resolutionMeters: Float,
+  tags: List[String],
+  datasource: String,
+  sceneMetadata: Map[String, Any],
+  cloudCover: Option[Float],
+  acquisitionDate: Option[java.sql.Timestamp],
+  thumbnailStatus: JobStatus,
+  boundaryStatus: JobStatus,
+  status: JobStatus,
+  sunAzimuth: Option[Float],
+  sunElevation: Option[Float],
+  name: String,
+  images: Seq[Image],
+  footprint: Option[Projected[Geometry]],
+  thumbnails: Seq[Thumbnail]
+)
+
+/** Helper object to create SceneWithRelated from case classes */
+object SceneWithRelated {
+
+  /** Helper constructor to create SceneWithRelated from case classes */
+  def fromComponents(
+    scene: Scene,
     images: Seq[Image],
     thumbnails: Seq[Thumbnail]
-  ): Scene.WithRelated = Scene.withRelated(
-    this.id,
-    this.createdAt,
-    this.createdBy,
-    this.modifiedAt,
-    this.modifiedBy,
-    this.organizationId,
-    this.visibility,
-    this.resolutionMeters,
-    this.tags,
-    this.datasource,
-    this.sceneMetadata,
-    this.cloudCover,
-    this.acquisitionDate,
-    this.thumbnailStatus,
-    this.boundaryStatus,
-    this.status,
-    this.sunAzimuth,
-    this.sunElevation,
-    this.name,
-    images,
-    this.footprint,
-    thumbnails
-  )
+  ): SceneWithRelated = {
+    SceneWithRelated(
+      scene.id,
+      scene.createdBy,
+      scene.modifiedBy,
+      scene.createdAt,
+      scene.modifiedAt,
+      scene.organizationId,
+      scene.visibility,
+      scene.resolutionMeters,
+      scene.tags,
+      scene.datasource,
+      scene.sceneMetadata,
+      scene.cloudCover,
+      scene.acquisitionDate,
+      scene.thumbnailStatus,
+      scene.boundaryStatus,
+      scene.status,
+      scene.sunAzimuth,
+      scene.sunElevation,
+      scene.name,
+      images,
+      scene.footprint,
+      thumbnails
+    )
+  }
 }
 
 
-object Scene extends GeoJsonSupport {
-
-  def tupled = (Scene.apply _).tupled
-
-  def create = Create.apply _
-
-  def withRelated = WithRelated.apply _
-
-  implicit val defaultThumbnailFormat = jsonFormat21(Scene.apply)
-
-  /** Case class extracted from a POST request */
-  case class Create(
-    organizationId: UUID,
-    ingestSizeBytes: Int,
-    visibility: Visibility,
-    resolutionMeters: Float,
-    tags: List[String],
-    datasource: String,
-    sceneMetadata: Map[String, Any],
-    cloudCover: Option[Float],
-    acquisitionDate: Option[java.sql.Timestamp],
-    thumbnailStatus: JobStatus,
-    boundaryStatus: JobStatus,
-    status: JobStatus,
-    sunAzimuth: Option[Float],
-    sunElevation: Option[Float],
-    name: String,
-    images: List[Image.Identified],
-    footprint: Option[Projected[Geometry]],
-    thumbnails: List[Thumbnail.Identified]
-  ) {
-    def toScene(userId: String): Scene = {
-      val now = new Timestamp((new java.util.Date()).getTime())
-      Scene(
-        UUID.randomUUID, // primary key
-        now, // createdAt
-        userId, // createdBy
-        now, // modifiedAt
-        userId, // modifiedBy
-        organizationId,
-        ingestSizeBytes,
-        visibility,
-        resolutionMeters,
-        tags,
-        datasource,
-        sceneMetadata,
-        cloudCover,
-        acquisitionDate,
-        thumbnailStatus,
-        boundaryStatus,
-        status,
-        sunAzimuth,
-        sunElevation,
-        name,
-        footprint
-      )
-    }
+/** Thumbnail class when posted with a scene */
+case class SceneThumbnail(
+  id: Option[UUID],
+  thumbnailSize: ThumbnailSize,
+  widthPx: Int,
+  heightPx: Int,
+  url: String
+) {
+  def toThumbnail(userId: String, scene: Scene): Thumbnail = {
+    val now = new Timestamp((new java.util.Date()).getTime())
+    Thumbnail(
+      UUID.randomUUID, // primary key
+      now, // createdAt
+      now, // modifiedAt
+      scene.organizationId,
+      widthPx,
+      heightPx,
+      scene.id,
+      url,
+      thumbnailSize
+    )
   }
+}
 
-  object Create {
-    implicit val defaultThumbnailWithRelatedFormat = jsonFormat18(Create.apply)
+/** Image class when posted with a scene */
+case class SceneImage(
+  id: Option[UUID],
+  rawDataBytes: Int,
+  visibility: Visibility,
+  filename: String,
+  sourceuri: String,
+  bands: List[String],
+  imageMetadata: Map[String, Any]
+) {
+  def toImage(userId: String, scene: Scene): Image = {
+    val now = new Timestamp((new java.util.Date()).getTime())
+    Image(
+      UUID.randomUUID, // primary key
+      now, // createdAt
+      now, // modifiedAt
+      scene.organizationId,
+      userId, // createdBy: String,
+      userId, // modifiedBy: String,
+      rawDataBytes,
+      visibility,
+      filename,
+      sourceuri,
+      scene.id,
+      bands,
+      imageMetadata
+    )
   }
+}
 
-  case class WithRelated(
-    id: UUID,
-    createdAt: Timestamp,
-    createdBy: String,
-    modifiedAt: Timestamp,
-    modifiedBy: String,
-    organizationId: UUID,
-    visibility: Visibility,
-    resolutionMeters: Float,
-    tags: List[String],
-    datasource: String,
-    sceneMetadata: Map[String, Any],
-    cloudCover: Option[Float],
-    acquisitionDate: Option[java.sql.Timestamp],
-    thumbnailStatus: JobStatus,
-    boundaryStatus: JobStatus,
-    status: JobStatus,
-    sunAzimuth: Option[Float],
-    sunElevation: Option[Float],
-    name: String,
-    images: Seq[Image],
-    footprint: Option[Projected[Geometry]],
-    thumbnails: Seq[Thumbnail]
-  )
-
-  object WithRelated {
-    implicit val defaultThumbnailWithRelatedFormat = jsonFormat22(WithRelated.apply)
-
-    /** Helper function to create Iterable[Scene.WithRelated] from join
-      *
-      * It is necessary to map over the distinct scenes because that is the only way to
-      * ensure that the sort order of the query result remains ordered after grouping
-      *
-      * @param records result of join query to return scene with related
-      * information
-      */
-    def fromRecords(records: Seq[(Scene, Option[Image], Option[Thumbnail])]): Iterable[Scene.WithRelated] = {
-      val distinctScenes = records.map(_._1).distinct
-      val grouped = records.groupBy(_._1)
-      distinctScenes.map{ scene =>
-        // This should be relatively safe since scene is the key grouped by
-        val (seqImages, seqThumbnails) = grouped(scene)
-          .map { case (sr, im, th) => (im, th) }
-          .unzip
-        scene.withRelatedFromComponents(seqImages.flatten, seqThumbnails.flatten.distinct)
-      }
-    }
+/** Case class extracted from a POST request */
+case class CreateScene(
+  organizationId: UUID,
+  ingestSizeBytes: Int,
+  visibility: Visibility,
+  resolutionMeters: Float,
+  tags: List[String],
+  datasource: String,
+  sceneMetadata: Map[String, Any],
+  cloudCover: Option[Float],
+  acquisitionDate: Option[java.sql.Timestamp],
+  thumbnailStatus: JobStatus,
+  boundaryStatus: JobStatus,
+  status: JobStatus,
+  sunAzimuth: Option[Float],
+  sunElevation: Option[Float],
+  name: String,
+  images: List[SceneImage],
+  footprint: Option[Projected[Geometry]],
+  thumbnails: List[SceneThumbnail]
+) {
+  def toScene(userId: String): Scene = {
+    val now = new Timestamp((new java.util.Date()).getTime())
+    Scene(
+      UUID.randomUUID, // primary key
+      now, // createdAt
+      now, // modifiedAt
+      organizationId,
+      userId, // createdBy
+      userId, // modifiedBy
+      ingestSizeBytes,
+      visibility,
+      resolutionMeters,
+      tags,
+      datasource,
+      sceneMetadata,
+      cloudCover,
+      acquisitionDate,
+      thumbnailStatus,
+      boundaryStatus,
+      status,
+      sunAzimuth,
+      sunElevation,
+      name,
+      footprint
+    )
   }
 }
