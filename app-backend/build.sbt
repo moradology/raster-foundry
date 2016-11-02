@@ -128,6 +128,7 @@ lazy val ingest = project.in(file("ingest"))
       Dependencies.geotrellisVector,
       Dependencies.geotrellisSparkEtl,
       Dependencies.geotrellisS3,
+      Dependencies.geotrellisUtil,
       Dependencies.akkajson,
       Dependencies.spark,
       Dependencies.scopt

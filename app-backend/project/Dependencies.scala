@@ -14,6 +14,7 @@ object Dependencies {
   val geotrellisRaster   = "com.azavea.geotrellis" %% "geotrellis-raster"                 % Version.geotrellis
   val geotrellisSlick    = "com.azavea.geotrellis" %% "geotrellis-slick"                  % Version.geotrellis
   val geotrellisVector   = "com.azavea.geotrellis" %% "geotrellis-vector"                 % Version.geotrellis
+  val geotrellisUtil     = "com.azavea.geotrellis" %% "geotrellis-util"                   % Version.geotrellis
   val spark              = "org.apache.spark"      %% "spark-core"                        % Version.spark % "provided"
   val hikariCP           = "com.typesafe.slick"    %% "slick-hikaricp"                    % Version.hikariCP
   val postgres           = "org.postgresql"         % "postgresql"                        % Version.postgres

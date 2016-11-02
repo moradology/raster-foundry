@@ -6,7 +6,7 @@ import DefaultJsonProtocol._
 
 import geotrellis.vector.Extent
 
-case class SourceDefinition(uri: URI, extent: Extent, bandDefinitions: Array[BandMapping])
+case class SourceDefinition(uri: URI, extent: Extent, bandMaps: Array[BandMapping])
 
 object SourceDefinition {
   implicit val jsonFormat = jsonFormat3(SourceDefinition.apply _)

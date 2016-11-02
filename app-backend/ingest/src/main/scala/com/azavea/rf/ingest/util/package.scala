@@ -28,7 +28,16 @@ package object util {
       throw new IllegalArgumentException(s"Resource at $uri is not valid")
   }
 
-  def readFile(fileUri: URI): String = {
+  def readBytes(fileUri: URI): Array[Byte] = {
+    val is = getStream(fileUri)
+    try {
+      IOUtils.toByteArray(is)
+    } finally {
+      is.close()
+    }
+  }
+
+  def readString(fileUri: URI): String = {
     val is = getStream(fileUri)
     try {
       IOUtils.toString(is)

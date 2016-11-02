@@ -57,28 +57,4 @@ object S3 {
 
     result.toSeq
   }
-
-  def getStream(uri: URI): InputStream = uri.getScheme match {
-    case "file" =>
-      new FileInputStream(new File(uri))
-    case "http" =>
-      uri.toURL.openStream
-    case "https" =>
-      uri.toURL.openStream
-    case "s3" =>
-      val client = new AmazonS3Client(new DefaultAWSCredentialsProviderChain)
-      val s3uri = new AmazonS3URI(uri)
-      client.getObject(s3uri.getBucket, s3uri.getKey).getObjectContent()
-    case _ =>
-      throw new IllegalArgumentException(s"Resource at $uri is not valid")
-  }
-
-  def readFile(fileUri: URI): String = {
-    val is = getStream(fileUri)
-    try {
-      IOUtils.toString(is)
-    } finally {
-      is.close()
-    }
-  }
 }
