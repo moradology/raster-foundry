@@ -1,5 +1,7 @@
 package com.azavea.rf.ingest
 
+import geotrellis.raster._
+import geotrellis.proj4._
 import spray.json._
 import DefaultJsonProtocol._
 
@@ -52,5 +54,41 @@ package object model {
     }
   }
 
-}
+  implicit object cellSizeJsonFormat extends RootJsonFormat[CellSize] {
+    def write(cs: CellSize) = JsObject(
+      "width" -> JsNumber(cs.width),
+      "height" -> JsNumber(cs.height)
+    )
 
+    def read(value: JsValue) =
+      value.asJsObject.getFields("width", "height") match {
+      case Seq(JsNumber(width), JsNumber(height)) =>
+        CellSize(width.toDouble, height.toDouble)
+      case _ =>
+        deserializationError("Failed to parse ${value} to cellsize")
+    }
+  }
+
+  implicit object cellTypeJsonFormat extends JsonFormat[CellType] {
+    def write(ct: CellType) = JsString(ct.toString)
+
+    def read(value: JsValue) = value match {
+      case JsString(ct) =>
+        CellType.fromString(ct)
+      case _ =>
+        deserializationError("Failed to parse ${value} to CellType")
+    }
+  }
+
+  implicit object crsJsonFormat extends JsonFormat[CRS] {
+    def write(crs: CRS) =
+      JsString(s"epsg:${crs.epsgCode.get}")
+
+    def read(value: JsValue): CRS = value match {
+      case JsString(epsg) =>
+        CRS.fromName(epsg)
+      case _ =>
+        deserializationError("Failed to parse ${value} to CRS")
+    }
+  }
+}

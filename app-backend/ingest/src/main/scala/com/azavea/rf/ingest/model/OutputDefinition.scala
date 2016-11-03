@@ -1,13 +1,20 @@
 package com.azavea.rf.ingest.model
 
+import geotrellis.proj4.CRS
+import geotrellis.raster._
 import spray.json._
 import DefaultJsonProtocol._
-
 import java.net.URI
 
-case class OutputDefinition(uri: URI, pyramid: Boolean, native: Boolean)
+case class OutputDefinition(
+  uri: URI,
+  crs: CRS,
+  cellType: CellType,
+  cellSize: CellSize,
+  pyramid: Boolean,
+  native: Boolean
+)
 
 object OutputDefinition {
-  implicit val jsonFormat = jsonFormat3(OutputDefinition.apply _)
+  implicit val jsonFormat = jsonFormat6(OutputDefinition.apply _)
 }
-

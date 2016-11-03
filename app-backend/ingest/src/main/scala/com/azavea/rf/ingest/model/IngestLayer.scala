@@ -5,9 +5,12 @@ import DefaultJsonProtocol._
 
 import java.util.UUID
 
-case class IngestLayer(id: UUID, output: OutputDefinition, sources: Array[SourceDefinition], crs: String)
+case class IngestLayer(
+  id: UUID,
+  output: OutputDefinition,
+  sources: Array[SourceDefinition]
+)
 
 object IngestLayer {
-  implicit val jsonFormat = jsonFormat4(IngestLayer.apply _)
+  implicit val jsonFormat = jsonFormat3(IngestLayer.apply _)
 }
-
