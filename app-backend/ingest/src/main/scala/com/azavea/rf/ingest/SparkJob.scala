@@ -10,8 +10,6 @@ trait SparkJob {
       .setAppName(s"Raster Foundry Ingest")
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .set("spark.kryo.registrator", "geotrellis.spark.io.kryo.KryoRegistrator")
-
+      .setMaster("local[*]")
   // instantiate our spark context (implicit as a convention for functions which require an SC)
-  implicit val sc = new SparkContext(conf)
 }
-

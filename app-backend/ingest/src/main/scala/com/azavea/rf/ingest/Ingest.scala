@@ -20,6 +20,32 @@ object Ingest extends SparkJob {
 
   case class Params(jobDefinition: URI = new URI(""))
 
+  def calculateTileLayerMetadata(layer: IngestLayer): TileLayerMetadata[SpatialKey] = {
+    // We need to build TileLayerMetadata that we expect to start pyramid from
+    val overallExtent = layer.sources
+      .map(src => src.extent.reproject(src.crs, layer.output.crs))
+      .reduce(_ combine _)
+
+    // Infer the base level of the TMS pyramid based on overall extent and cellSize
+    val LayoutLevel(maxZoom, baseLayoutDefinition) =
+      ZoomedLayoutScheme(layer.output.crs, 256).levelFor(overallExtent, layer.output.cellSize)
+
+    TileLayerMetadata(
+      cellType = layer.output.cellType,
+      layout = baseLayoutDefinition,
+      extent = overallExtent,
+      crs = layer.output.crs,
+      bounds = {
+        val GridBounds(colMin, rowMin, colMax, rowMax) =
+          baseLayoutDefinition.mapTransform(overallExtent)
+        KeyBounds(
+          SpatialKey(colMin, rowMin),
+          SpatialKey(colMax, rowMax)
+        )
+      }
+    )
+  }
+
   def main(args: Array[String]): Unit = {
     val params = CommandLine.parser.parse(args, Ingest.Params()) match {
       case Some(params) => params
@@ -28,52 +54,37 @@ object Ingest extends SparkJob {
 
     val ingestDefinition = readString(params.jobDefinition).parseJson.convertTo[IngestDefinition]
 
-    val tasksByLayer = ingestDefinition.tasksByLayer
+    implicit val sc = new SparkContext(conf)
 
     // Loop over the different Layers to construct RDDs from their input sources
-    tasksByLayer.foreach { case (id, tasks) =>
-      val tasksRdd: RDD[IngestDefinition.Task] = sc.parallelize(tasks)
+    ingestDefinition.layers.foreach { layer =>
+      val destCRS = layer.output.crs
 
-      val preLayout: RDD[((ProjectedExtent, Int), Tile)] =
-        tasksRdd.flatMap { task: IngestDefinition.Task =>
-          val tiffBytes = readBytes(task.sourceUri)
-          val MultibandGeoTiff(mbTile, srcExtent, crs, tags, options) = MultibandGeoTiff(tiffBytes)
-          val projected = mbTile.reproject(srcExtent, crs, LatLng)
+      // Read source tiles and reproject them to desired CRS
+      val sourceTiles: RDD[((ProjectedExtent, Int), Tile)] =
+        sc.parallelize(layer.sources, layer.sources.length).flatMap { source =>
+          val srcCrs = source.crs
+          val tiffBytes = readBytes(source.uri)
+          val MultibandGeoTiff(mbTile, srcExtent, _, tags, options) = MultibandGeoTiff(tiffBytes)
 
-          task.bandMaps.map { bandMap: BandMapping =>
-            ((ProjectedExtent(srcExtent, LatLng), bandMap.target), mbTile.band(bandMap.source))
+          source.bandMaps.map { bm: BandMapping =>
+            // GeoTrellis multi-band tiles are 0 indexed
+            val band = mbTile.band(bm.source - 1).reproject(srcExtent, srcCrs, destCRS)
+            (ProjectedExtent(band.extent, destCRS), bm.target - 1) -> band.tile
           }
         }
 
-      val destCRS = CRS.fromString(tasks.head.crsString)
+      val tileLayerMetadata = Ingest.calculateTileLayerMetadata(layer)
 
-      val overallExtent = tasks
-        .map(_.extent)
-        .reduce({ (overallExtent, nextExtent) =>
-          overallExtent.expandToInclude(nextExtent)
-        }).reproject(LatLng, destCRS)
+      // TODO: Add resample options to use Bilinear/NN (needs to be job layer.output)
 
-      val layoutScheme = ZoomedLayoutScheme.layoutForZoom(15, destCRS.worldExtent, 256)
-
-      val GridBounds(colMin, rowMin, colMax, rowMax) = layoutScheme.mapTransform(overallExtent)
-      val tlmd = 
-        TileLayerMetadata(
-          cellType = UShortCellType,
-          layout = layoutScheme,
-          extent = overallExtent,
-          crs = destCRS,
-          bounds = KeyBounds(
-            SpatialKey(colMin, rowMin),
-            SpatialKey(colMax, rowMax)
-          )
-        )
-
-      //val tlmd: TileLayerMetadata[(SpatialKey, Int)] =
-      //  TileLayerMetadata.fromRdd(preLayout, ZoomedLayoutScheme(LatLng), Some(20))
-
-      preLayout.tileToLayout(tlmd)
-
+      val tiledRdd = sourceTiles.tileToLayout[(SpatialKey, Int)](
+        tileLayerMetadata.cellType,
+        tileLayerMetadata.layout
+      )
+      tiledRdd.keys.collect.foreach(println)
     }
+    sc.stop
   }
+  // test:runMain com.azavea.rf.ingest.Ingest -j file:/Users/eugene/proj/raster-foundry/app-backend/ingest/sampleJob.json
 }
-
