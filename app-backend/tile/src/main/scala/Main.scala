@@ -27,7 +27,7 @@ object Main extends App with Config with AkkaSystem.LoggerExecutor {
 
   def exceptionHandler =
     ExceptionHandler {
-      case e: TileNotFoundError =>
+      case e: ValueNotFoundError =>
         complete(StatusCodes.NotFound)
       case e: IllegalArgumentException =>
         complete(StatusCodes.ClientError(400)("Bad Argument", e.getMessage))
