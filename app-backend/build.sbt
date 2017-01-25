@@ -167,6 +167,7 @@ lazy val tile = Project("tile", file("tile"))
       Dependencies.geotrellisSpark,
       Dependencies.geotrellisS3,
       Dependencies.caffeine,
+      Dependencies.scaffeine,
       Dependencies.elasticacheClient,
       Dependencies.scalacacheCaffeine,
       Dependencies.scalacacheMemcache.exclude("net.spy", "spymemcached"),

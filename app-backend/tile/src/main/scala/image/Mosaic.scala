@@ -4,19 +4,24 @@ import com.azavea.rf.database.Database
 import com.azavea.rf.database.tables.ScenesToProjects
 import com.azavea.rf.datamodel.MosaicDefinition
 
+import com.github.blemale.scaffeine.{ Cache => ScaffCache, Scaffeine }
+import scalacache.caffeine.CaffeineCache
+import com.azavea.rf.tile._
+import scalacache._
 import geotrellis.raster._
 import geotrellis.spark._
 import geotrellis.spark.io._
-import com.azavea.rf.tile._
+
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent._
 import scala.concurrent.duration._
 import java.util.UUID
 
-import scalacache._
 
 object Mosaic {
   implicit val cache = LayerCache.memoryCache
+
+  val memcachedClient = LayerCache.memcachedClient
 
   /** Cache the result of metadata queries that may have required walking up the pyramid to find suitable layers */
   def tileLayerMetadata(id: RfLayerId, zoom: Int) = caching(s"mosaic-tlm-$id-$zoom") {
@@ -32,11 +37,44 @@ object Mosaic {
     }
   }
 
+  val futureMosaicDefinitions: ScaffCache[String, Future[Option[MosaicDefinition]]] =
+    Scaffeine()
+      .recordStats()
+      .expireAfterWrite(20.minute)
+      .maximumSize(500)
+      .build[String, Future[Option[MosaicDefinition]]]()
+
   /** Cache the result of mosaic definition, use tag to control cache rollover */
-  def mosaicDefinition(projectId: UUID, ttl: Duration)(implicit db: Database) =
-    cachingWithTTL(s"mosaic-definition-$projectId")(ttl) {
-      ScenesToProjects.getMosaicDefinition(projectId)
+  def mosaicDefinition(projectId: UUID, ttl: Duration)(implicit db: Database) = {
+    def fetch(cKey: String): Future[Option[MosaicDefinition]] = {
+      println(s"the CKEY: $cKey")
+      memcachedClient
+        .asyncGet(cKey)
+        .asFuture[MosaicDefinition]
+        .flatMap({ maybeMosaicDefinition =>
+          Option(maybeMosaicDefinition) match {
+            case Some(mosaicDefinition) => // cache hit
+              println(s"mosaicdef found in memcached: $cKey")
+              Future {
+                Option(mosaicDefinition)
+              }
+            case None =>         // cache miss
+              println(s"mosaicdef cache miss: $cKey")
+              val futureMaybeDefinition = ScenesToProjects.getMosaicDefinition(projectId)
+              for {
+                maybeDef <- futureMaybeDefinition
+                definition <- maybeDef
+              } memcachedClient.set(cKey, 10000, definition)
+              futureMaybeDefinition
+          }
+        })
     }
+
+    val cacheKey = s"mosaic-definition-$projectId"
+    val futureMosaicDefinition = futureMosaicDefinitions.get(cacheKey, fetch)
+    futureMosaicDefinitions.put(cacheKey, futureMosaicDefinition)
+    futureMosaicDefinition
+  }
 
   /** Fetch the tile for given resolution. If it is not present, use a tile from a lower zoom level */
   def fetch(id: RfLayerId, zoom: Int, col: Int, row: Int): Future[Option[MultibandTile]] = {
