@@ -20,8 +20,11 @@ case class Image(
   imageMetadata: Map[String, Any],
   resolutionMeters: Float,
   metadataFiles: List[String]
-) {
-  def withRelatedFromComponents(bands: Seq[Band]): Image.WithRelated = Image.WithRelated(
+) extends WithRelated2Constructor {
+  type T1 = this.type
+  type T2 = Band
+  type Related[T1] = Image.WithRelated
+  def withRelatedFromComponents(bands: Seq[T2]): Related[T1] = Image.WithRelated(
     this.id,
     this.createdAt,
     this.modifiedAt,

@@ -6,10 +6,10 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import slick.lifted.Rep
 import slick.dbio.{DBIO, StreamingDBIO, Streaming}
 
-import com.azavea.rf.datamodel.PaginatedResponse
+import com.azavea.rf.datamodel._
 import com.azavea.rf.database.{Database => DB}
 import com.azavea.rf.database.ExtendedPostgresDriver.api.TableQuery
-import com.azavea.rf.database.query.ListQueryResult
+import com.azavea.rf.database.query._
 
 trait ActionRunner {
 
@@ -28,7 +28,6 @@ trait ActionRunner {
         records
       )
     })
-
   }
 
   def readOne[T](a: DBIO[Option[T]])(implicit database: DB): Future[Option[T]] =
@@ -39,4 +38,11 @@ trait ActionRunner {
   def update(a: DBIO[Int])(implicit database: DB): Future[Int] = database.db.run(a)
 
   def drop(a: DBIO[Int])(implicit database: DB): Future[Int] = database.db.run(a)
+
+  def withRelatedInsert2[T1 <: WithRelated2Constructor, T2](a: DBIO[(T1, Seq[T2])])
+                        (implicit database: DB) = {
+    database.db.run(a) map {
+      case (r1, r2) => r1.withRelatedFromComponents(r2)
+    }
+  }
 }

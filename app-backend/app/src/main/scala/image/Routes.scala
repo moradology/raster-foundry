@@ -9,21 +9,22 @@ import com.lonelyplanet.akka.http.extensions.PaginationDirectives
 
 import com.azavea.rf.common.{Authentication, UserErrorHandler}
 import com.azavea.rf.database.tables.Images
-import com.azavea.rf.database.Database
+import com.azavea.rf.database.{Database, ActionRunner}
 import com.azavea.rf.datamodel._
 
 
 trait ImageRoutes extends Authentication
     with ImageQueryParametersDirective
     with PaginationDirectives
-    with UserErrorHandler {
+    with UserErrorHandler
+    with ActionRunner {
 
   implicit def database: Database
 
   val imageRoutes: Route = handleExceptions(userExceptionHandler) {
     pathEndOrSingleSlash {
-      get { listImages } ~
-      post { createImage }
+      get { listImages } // ~
+//      post { createImage }
     } ~
     pathPrefix(JavaUUID) { imageId =>
       get { getImage(imageId) } ~
@@ -43,8 +44,8 @@ trait ImageRoutes extends Authentication
 
   def createImage: Route = authenticate { user =>
     entity(as[Image.Banded]) { newImage =>
-      onSuccess(Images.insertImage(newImage, user)) { image =>
-        complete(image)
+      onSuccess(withRelatedInsert2[Image, Band](Images.insertImage(newImage, user))) {
+        image: Image.WithRelated => complete(image)
       }
     }
   }

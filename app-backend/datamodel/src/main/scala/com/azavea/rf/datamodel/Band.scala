@@ -11,7 +11,7 @@ case class Band(
   name: String,
   number: Int,
   wavelength: List[Int]
-)
+) extends RelatedField
 
 object Band {//extends RangeUnmarshaler{
 

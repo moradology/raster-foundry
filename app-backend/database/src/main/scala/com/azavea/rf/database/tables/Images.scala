@@ -69,19 +69,13 @@ object Images extends TableQuery(tag => new Images(tag)) with LazyLogging {
     * @param user User object inserting the image
     */
   def insertImage(imageBanded: Image.Banded, user: User)
-                 (implicit database: DB): Future[Image.WithRelated] = {
+                 (implicit database: DB) = {
     val image = imageBanded.toImage(user.id)
     val bands = imageBanded.bands map { _.toBand(image.id)}
-    val insertAction = (
-      for {
-        imageInsert <- (Images returning Images).forceInsert(image)
-        bandsInsert <- (Bands returning Bands).forceInsertAll(bands)
-      } yield (imageInsert, bandsInsert)).transactionally
-    database.db.run {
-      insertAction
-    } map {
-      case (im: Image, bs: Seq[Band]) => im.withRelatedFromComponents(bs)
-    }
+    (for {
+       imageInsert <- (Images returning Images).forceInsert(image)
+       bandsInsert <- (Bands returning Bands).forceInsertAll(bands)
+     } yield (imageInsert, bandsInsert)) transactionally
   }
 
   /** Get an image given an ID
