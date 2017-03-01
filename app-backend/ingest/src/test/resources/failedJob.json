@@ -1,0 +1,109 @@
+{
+  "layers": [
+    {
+      "output": {
+        "crs": "epsg:3857",
+        "cell_size": {
+          "width": 30,
+          "height": 30
+        },
+        "pyramid": true,
+        "cellType": "uint16raw",
+        "tileSize": 256,
+        "resampleMethod": "NearestNeighbor",
+        "histogramBuckets": 512,
+        "uri": "s3://geotrellis-test/npz/failed-ingest6",
+        "keyIndexMethod": "ZCurveKeyIndexMethod",
+        "native": false
+      },
+      "id": "4ce33013-e682-4d1f-af21-10af26a5e4dc",
+      "sources": [
+        {
+          "crs": "epsg:32617",
+          "bandMaps": [
+            {
+              "source": 1,
+              "target": 7
+            }
+          ],
+          "uri": "https://landsat-pds.s3.amazonaws.com/L8/018/031/LC80180312016221LGN00/LC80180312016221LGN00_B7.TIF",
+          "cellSize": {
+            "width": 30,
+            "height": 30
+          },
+          "extent": [
+            -81.95746,
+            40.6861,
+            -79.15909,
+            42.81771999999996
+          ],
+          "extentCrs": "epsg:4326"
+        },
+        {
+          "crs": "epsg:32617",
+          "bandMaps": [
+            {
+              "source": 1,
+              "target": 9
+            }
+          ],
+          "uri": "https://landsat-pds.s3.amazonaws.com/L8/018/031/LC80180312016221LGN00/LC80180312016221LGN00_B9.TIF",
+          "cellSize": {
+            "width": 30,
+            "height": 30
+          },
+          "extent": [
+            -81.95746,
+            40.6861,
+            -79.15909,
+            42.81771999999996
+          ],
+          "extentCrs": "epsg:4326"
+        },
+        {
+          "crs": "epsg:32617",
+          "bandMaps": [
+            {
+              "source": 1,
+              "target": 10
+            }
+          ],
+          "uri": "https://landsat-pds.s3.amazonaws.com/L8/018/031/LC80180312016221LGN00/LC80180312016221LGN00_B10.TIF",
+          "cellSize": {
+            "width": 30,
+            "height": 30
+          },
+          "extent": [
+            -81.95746,
+            40.6861,
+            -79.15909,
+            42.81771999999996
+          ],
+          "extentCrs": "epsg:4326"
+        },
+        {
+          "crs": "epsg:32617",
+          "bandMaps": [
+            {
+              "source": 1,
+              "target": 11
+            }
+          ],
+          "uri": "https://landsat-pds.s3.amazonaws.com/L8/018/031/LC80180312016221LGN00/LC80180312016221LGN00_B11.TIF",
+          "cellSize": {
+            "width": 30,
+            "height": 30
+          },
+          "extent": [
+            -81.95746,
+            40.6861,
+            -79.15909,
+            42.81771999999996
+          ],
+          "extentCrs": "epsg:4326"
+        }
+      ]
+    }
+  ],
+  "id": "4ce33013-e682-4d1f-af21-10af26a5e4dc"
+}

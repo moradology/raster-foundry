@@ -3,19 +3,19 @@ package com.azavea.rf.ingest
 import com.azavea.rf.ingest.util._
 import com.azavea.rf.ingest.model._
 
-import geotrellis.raster.histogram.Histogram
+import geotrellis.raster._
 import geotrellis.raster.io._
+import geotrellis.raster.histogram.Histogram
 import geotrellis.raster.resample.NearestNeighbor
+import geotrellis.raster.io.geotiff.MultibandGeoTiff
 import geotrellis.spark._
 import geotrellis.spark.io._
+import geotrellis.spark.io.s3._
+import geotrellis.spark.tiling._
 import geotrellis.spark.io.file._
 import geotrellis.spark.io.index.ZCurveKeyIndexMethod
-import geotrellis.spark.io.s3._
 import geotrellis.spark.pyramid.Pyramid
 import geotrellis.vector.ProjectedExtent
-import geotrellis.raster._
-import geotrellis.raster.io.geotiff.MultibandGeoTiff
-import geotrellis.spark.tiling._
 import geotrellis.proj4._
 
 import com.typesafe.scalalogging.LazyLogging
@@ -27,7 +27,6 @@ import DefaultJsonProtocol._
 import java.net.URI
 import scala.collection.JavaConverters._
 
-case class BandTile(band: Int, tile: Tile)
 
 object Ingest extends SparkJob with LazyLogging {
 
@@ -46,6 +45,7 @@ object Ingest extends SparkJob with LazyLogging {
   def getRfLayerManagement(outputDef: OutputDefinition): (RfLayerWriter, RfLayerDeleter, AttributeStore) = outputDef.uri.getScheme match {
     case "s3" | "s3a" | "s3n" =>
       val (bucket, prefix) = S3.parse(outputDef.uri)
+      println(bucket, prefix)
       val s3Writer = S3LayerWriter(bucket, prefix)
       val writer = s3Writer.writer[SpatialKey, MultibandTile, TileLayerMetadata[SpatialKey]](outputDef.keyIndexMethod)
       val deleter = S3LayerDeleter(s3Writer.attributeStore)
@@ -54,6 +54,7 @@ object Ingest extends SparkJob with LazyLogging {
       val fileWriter = FileLayerWriter(outputDef.uri.getPath)
       val writer = fileWriter.writer[SpatialKey, MultibandTile, TileLayerMetadata[SpatialKey]](outputDef.keyIndexMethod)
       val deleter = FileLayerDeleter(outputDef.uri.getPath)
+      println(s"deleter for: ${outputDef.uri.getPath}")
       (writer, deleter, fileWriter.attributeStore)
   }
 
@@ -62,8 +63,10 @@ object Ingest extends SparkJob with LazyLogging {
       deleter.delete(layerId)
     } catch {
       case e: LayerNotFoundError =>
+        throw e
         logger.debug(s"Overwritten layer $layerId not found. Proceeding...")
       case e: com.amazonaws.services.s3.model.AmazonS3Exception =>
+        throw e
         logger.error(s"Unable to delete layer ${layerId}; check ingest configuration")
     }
   }
@@ -176,46 +179,35 @@ object Ingest extends SparkJob with LazyLogging {
     val sharedId = LayerId(layer.id.toString, 0)
     val failsafeDeleteLayer = deleteLayer(deleter, attributeStore)(_)
 
-    if (overwriteLayer && attributeStore.layerExists(sharedId)) { failsafeDeleteLayer(sharedId) }
+    if (overwriteLayer && attributeStore.layerExists(sharedId)) { println(s"overwrite 1, $sharedId");failsafeDeleteLayer(sharedId) }
+
+    logger.info(s"Writing layers")
+    attributeStore.write(sharedId, "ingestComplete", false)
     if (layer.output.pyramid) { // If pyramiding
       Pyramid.upLevels(layerRdd, layoutScheme, maxZoom, 1, resampleMethod) { (rdd, zoom) =>
         logger.info(s"Writing zoom level $zoom in ${layer.id.toString}")
-        // attributes that apply to all layers are placed at zoom 0
         val layerId = LayerId(layer.id.toString, zoom)
-        if (overwriteLayer && attributeStore.layerExists(layerId)) { failsafeDeleteLayer(layerId) }
+        if (overwriteLayer && attributeStore.layerExists(layerId)) { println(s"overwrite 2, $layerId");failsafeDeleteLayer(layerId) }
+        attributeStore.write(layerId, "layerComplete", false)
+        println("the layer ID", layerId)
+        writer.write(layerId, rdd)
 
-        try {
-          writer.write(layerId, rdd)
-
-          if (zoom == math.max(maxZoom / 2, 1)) {
-            import spray.json.DefaultJsonProtocol._
-            attributeStore.write(sharedId, "histogram", multibandHistogram(rdd, numBuckets = 256))
-          }
-
-          if (zoom == 1) {
-            attributeStore.write(sharedId, "extent", rdd.metadata.extent)(ExtentJsonFormat) // avoid using default JF
-            attributeStore.write(sharedId, "crs", rdd.metadata.crs)(CRSJsonFormat) // avoid using default JF
-          }
-          // Write an attribute for verification of completed ingest
-          attributeStore.write(sharedId, "ingestComplete", true)
-        } catch {
-          case e: Throwable =>
-            attributeStore.write(sharedId, "ingestComplete", false)
-            throw e
+        if (zoom == math.max(maxZoom / 2, 1)) {
+          attributeStore.write(sharedId, "histogram", multibandHistogram(rdd, numBuckets = 256))
         }
+
+        if (zoom == 1) {
+          attributeStore.write(sharedId, "extent", rdd.metadata.extent)(ExtentJsonFormat) // avoid using default JF
+          attributeStore.write(sharedId, "crs", rdd.metadata.crs)(CRSJsonFormat) // avoid using default JF
+        }
+        attributeStore.write(layerId, "layerComplete", true)
       }
     } else { // If not pyramiding. TODO: figure out exactly what we want to store here
-      try {
-        logger.info(s"Writing (no pyramid) layer ${layer.id.toString}")
-        writer.write(sharedId, layerRdd)
-        attributeStore.write(sharedId, "ingestComplete", true)
-      } catch {
-        case e: Throwable =>
-          attributeStore.write(sharedId, "ingestComplete", false)
-          throw e
-      }
+      logger.info(s"Writing (no pyramid) layer ${layer.id.toString}")
+      writer.write(sharedId, layerRdd)
     }
-
+    attributeStore.write(sharedId, "ingestComplete", true)
+    logger.info(s"Ingest complete")
   }
 
   /** Sample ingest definitions can be found in the accompanying test/resources
@@ -236,7 +228,7 @@ object Ingest extends SparkJob with LazyLogging {
 
     try {
       ingestDefinition.layers.foreach(ingestLayer(params.overwrite))
-      if (params.testRun) ingestDefinition.layers.foreach(Validation.validateCatalogEntry)
+      if (params.testRun) { ingestDefinition.layers.foreach(Validation.validateCatalogEntry) }
     } finally {
       sc.stop
     }

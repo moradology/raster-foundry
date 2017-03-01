@@ -40,4 +40,5 @@ object Dependencies {
   val shapeless               = "com.chuusai"                 %% "shapeless"                         % Version.shapeless
   val findbugAnnotations      = "com.google.code.findbugs"     % "annotations"                       % Version.findbugAnnotations % "compile"
   val kryo                    = "com.esotericsoftware"         % "kryo"                              % Version.kryo
+  val awsSdkS3                = "com.amazonaws"                % "aws-java-sdk-s3"                   % "1.11.70"
 }

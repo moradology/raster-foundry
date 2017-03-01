@@ -160,7 +160,8 @@ lazy val ingest = Project("ingest", file("ingest"))
       Dependencies.geotrellisRaster,
       Dependencies.akkajson,
       Dependencies.spark,
-      Dependencies.scopt
+      Dependencies.scopt,
+      Dependencies.awsSdkS3
     )
   })
 
