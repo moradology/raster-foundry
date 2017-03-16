@@ -3,14 +3,7 @@ package com.azavea.rf.api.project
 import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.unmarshalling._
 import akka.http.scaladsl.model.StatusCodes
-import spray.json._
-import DefaultJsonProtocol._
 import com.lonelyplanet.akka.http.extensions.{PaginationDirectives, Order}
-
-import io.circe._
-import io.circe.generic.auto._
-import io.circe.parser._
-import io.circe.syntax._
 import com.azavea.rf.common.{Authentication, UserErrorHandler}
 import com.azavea.rf.database.tables._
 import com.azavea.rf.database.query._
@@ -18,13 +11,16 @@ import com.azavea.rf.database.Database
 import com.azavea.rf.datamodel._
 import com.azavea.rf.api.scene._
 import com.azavea.rf.api.utils.queryparams.QueryParametersCommon
+import io.circe._
+import io.circe.generic.auto._
+import io.circe.parser._
+import io.circe.syntax._
 import de.heikoseeberger.akkahttpcirce.CirceSupport._
 
 import java.util.UUID
 
 trait ProjectRoutes extends Authentication
     with QueryParametersCommon
-    with QueryParameterJsonFormat
     with SceneQueryParameterDirective
     with PaginationDirectives
     with UserErrorHandler {

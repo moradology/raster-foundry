@@ -4,6 +4,9 @@ import com.azavea.rf.database.tables.Users
 import com.azavea.rf.database.Database
 import com.azavea.rf.api.AkkaSystem
 import scala.concurrent.ExecutionContext.Implicits.global
+import io.circe._
+import io.circe.generic.auto._
+import de.heikoseeberger.akkahttpcirce.CirceSupport._
 
 /**
   * Available healthcheck values

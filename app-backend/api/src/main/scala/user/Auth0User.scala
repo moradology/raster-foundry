@@ -1,6 +1,9 @@
 package com.azavea.rf.api.user
 
-import spray.json._
+import com.azavea.rf.datamodel.User
+import com.azavea.rf.api.utils.Config
+import com.azavea.rf.api.utils.{ManagementBearerToken, Auth0Exception}
+
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpMethods._
 import akka.http.scaladsl.model._
@@ -8,18 +11,17 @@ import akka.http.scaladsl.model.Uri.{Path, Query}
 import akka.http.scaladsl.model.headers.{Authorization, GenericHttpCredentials}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.http.scaladsl.marshalling.Marshal
-import com.azavea.rf.datamodel.SerializationUtils
 import com.github.blemale.scaffeine.{AsyncLoadingCache, Scaffeine}
+import com.typesafe.scalalogging.LazyLogging
+import io.circe._
+import io.circe.syntax._
+import io.circe.generic.auto._
+import de.heikoseeberger.akkahttpcirce.CirceSupport._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.Future
 
-import com.azavea.rf.datamodel.User
-import com.azavea.rf.api.utils.Config
-import com.azavea.rf.api.utils.{ManagementBearerToken, Auth0Exception}
-
-import com.typesafe.scalalogging.LazyLogging
 
 case class Auth0User(
   email: Option[String], email_verified: Option[Boolean],
@@ -27,9 +29,9 @@ case class Auth0User(
   phone_number: Option[String], phone_verified: Option[String],
   user_id: Option[String],
   created_at: Option[String], updated_at: Option[String],
-  identities: Option[Seq[Map[String, Any]]],
-  // app_metadata: Option[Map[String, Any]],
-  user_metadata: Option[Map[String, Any]],
+  identities: Option[Json],
+  // app_metadata: Option[Json],
+  user_metadata: Option[Json],
   picture: Option[String],
   name: Option[String],
   nickname: Option[String],
@@ -45,12 +47,9 @@ case class Auth0User(
 case class Auth0UserUpdate(
   email: Option[String],
   phone_number: Option[String],
-  user_metadata: Option[Map[String, Any]],
+  user_metadata: Option[Json],
   username: Option[String]
 )
-object Auth0UserUpdate extends SerializationUtils {
-  implicit val inner = jsonFormat4(Auth0UserUpdate.apply _)
-}
 
 object Auth0UserService extends Config with LazyLogging{
   import com.azavea.rf.api.AkkaSystem._
@@ -140,7 +139,7 @@ object Auth0UserService extends Config with LazyLogging{
                            headers = auth0UserBearerHeader,
                            entity = HttpEntity(
                              ContentTypes.`application/json`,
-                             auth0UserUpdate.toJson.toString
+                             auth0UserUpdate.asJson.noSpaces
                            )
                          ))
       .flatMap {

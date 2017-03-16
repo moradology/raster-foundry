@@ -15,10 +15,10 @@ import geotrellis.proj4._
 /**
   * Json formats for scenes
   */
-package object scene extends RfJsonProtocols {
-  // implicit val paginatedScenesFormat = jsonFormat6(PaginatedResponse[Scene.WithRelated])
-  implicit def encodePaginated[A: Encoder] =
-    Encoder.forProduct6("count", "hasPrevious", "hasNext", "page", "pageSize", "results")({pr: PaginatedResponse[A] =>
-                                                                                            (pr.count, pr.hasPrevious, pr.hasNext, pr.page, pr.pageSize, pr.results)
-                                                                                          })
-}
+//package object scene extends RfJsonProtocols {
+//  // implicit val paginatedScenesFormat = jsonFormat6(PaginatedResponse[Scene.WithRelated])
+//  implicit def encodePaginated[A: Encoder] =
+//    Encoder.forProduct6("count", "hasPrevious", "hasNext", "page", "pageSize", "results")({pr: PaginatedResponse[A] =>
+//                                                                                            (pr.count, pr.hasPrevious, pr.hasNext, pr.page, pr.pageSize, pr.results)
+//                                                                                          })
+//}

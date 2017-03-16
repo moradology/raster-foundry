@@ -1,5 +1,6 @@
 package com.azavea.rf.database.tables
 
+import io.circe._
 import com.azavea.rf.database.fields._
 import com.azavea.rf.database.sort._
 import com.azavea.rf.datamodel._
@@ -50,7 +51,7 @@ class Tools(_tableTag: Tag) extends Table[Tool](_tableTag, "tools")
   val compatibleDataSources: Rep[List[String]] = column[List[String]]("compatible_data_sources",
     O.Length(Int.MaxValue, varying = false), O.Default(List.empty))
   val stars: Rep[Float] = column[Float]("stars", O.Default(0.0f))
-  val definition: Rep[JsValue] = column[JsValue]("definition", O.Length(2147483647,varying=false))
+  val definition: Rep[Json] = column[Json]("definition", O.Length(2147483647,varying=false))
 
   lazy val organizationsFk =
     foreignKey("tools_organization_id_fkey", organizationId, Organizations)(

@@ -21,7 +21,6 @@ object AngularConfigService extends AkkaSystem.LoggerExecutor with Config {
         featureConfig.getString("description")
       )
     }.toSeq
-    implicit val featureFlagFormat = jsonFormat4(FeatureFlag)
 
     return AngularConfig(auth0ClientId, auth0Domain, features)
   }

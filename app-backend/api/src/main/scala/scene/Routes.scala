@@ -6,11 +6,11 @@ import com.azavea.rf.database.tables.Scenes
 import com.azavea.rf.datamodel._
 
 import com.lonelyplanet.akka.http.extensions.PaginationDirectives
-import de.heikoseeberger.akkahttpcirce.CirceSupport
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Route
 import io.circe._
 import io.circe.generic.auto._
+import de.heikoseeberger.akkahttpcirce.CirceSupport._
 
 import scala.util.{Success, Failure}
 import java.util.UUID
@@ -18,8 +18,7 @@ import java.util.UUID
 trait SceneRoutes extends Authentication
     with SceneQueryParameterDirective
     with PaginationDirectives
-    with UserErrorHandler
-    with CirceSupport {
+    with UserErrorHandler {
 
   implicit def database: Database
 
