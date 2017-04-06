@@ -1,5 +1,6 @@
 package com.azavea.rf.tile.routes
 
+import com.azavea.rf.common.Authentication
 import com.azavea.rf.tile.image._
 import com.azavea.rf.tile._
 import com.azavea.rf.tool.ast._
@@ -8,7 +9,9 @@ import com.azavea.rf.database.tables.Tools
 import com.azavea.rf.datamodel._
 import com.azavea.rf.tool.ast.codec._
 import com.azavea.rf.tool.ast._
+import com.azavea.rf.tool.op._
 
+import akka.http.scaladsl.marshalling.Marshal
 import io.circe._
 import io.circe.parser._
 import io.circe.syntax._
@@ -28,6 +31,7 @@ import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.model.{ContentType, HttpEntity, HttpResponse, MediaTypes}
 import com.typesafe.scalalogging.LazyLogging
 import cats.data._
+import cats.data.Validated._
 import cats.implicits._
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -35,7 +39,7 @@ import scala.concurrent._
 import java.util.UUID
 
 
-class ToolRoutes(implicit db: Database) extends LazyLogging {
+class ToolRoutes(implicit val database: Database) extends Authentication with LazyLogging {
   val userId: String = "rf_airflow-user"
 
   def lookupColorMap(str: Option[String]): ColorMap = {
@@ -88,51 +92,47 @@ class ToolRoutes(implicit db: Database) extends LazyLogging {
     source: (RFMLRaster, Int, Int, Int) => Future[Option[Tile]]
   ): Route =
     pathPrefix(Segment / Segment){ (organizationIdSegment, toolIdSegment) =>
-      // TODO: check token for orgranization access
-      val orgId = UUID.fromString(organizationIdSegment)
-      val toolId = UUID.fromString(toolIdSegment)
-      val futureTool: Future[Option[Tool.WithRelated]] = Tools.getTool(toolId)
+      authenticate { user =>
+        // TODO: check token for orgranization access
+        val orgId = UUID.fromString(organizationIdSegment)
+        val toolId = UUID.fromString(toolIdSegment)
+        val futureTool: Future[Tool.WithRelated] = Tools.getTool(toolId, user).map {
+          _.getOrElse(throw new java.io.IOException(toolId.toString))
+        }
 
-      (pathEndOrSingleSlash & get & rejectEmptyResponse) {
-        complete(futureTool)
-      } ~
-      pathPrefix(IntNumber / IntNumber / IntNumber){ (z, x, y) =>
-        parameter(
-          'part.?,
-          'geotiff.?(false),
-          'cm.?
-        )
-        { (partId, geotiffOutput, colorMap) =>
-          complete {
-            OptionT(futureTool).mapFilter { tool =>
-              logger.debug(s"Raw Tool: $tool")
-              // TODO: return useful HTTP errors on parse failure
-              tool.definition.as[MapAlgebraAST] match {
-                case Left(failure) =>
-                  logger.error(s"Failed to parse MapAlgebraAST from: ${tool.definition.noSpaces} with $failure")
-                  None
-
-                case Right(ast) =>
-                  logger.debug(s"Parsed Tool: ${ast}")
-                  ast.some
-              }
-            }.map { ast =>
-              // TODO: can we move it outside the z/x/y to get some re-use? (don't think so but should check)
-              val tms = Interpreter.tms(ast, source)
-              OptionT(tms(z,x,y)).map { op =>
-                val tile = op.toTile(IntCellType).get
-                // TODO: use color ramp to paint the tile
-
-                if (geotiffOutput) {
-                  // Largely for debugging, the Extent and CRS are *NOT* meaningful
-                  val geotiff = SinglebandGeoTiff(tile, Extent(0, 0, 0, 0), CRS.fromEpsgCode(3857))
-                  HttpResponse(entity = HttpEntity(ContentType(MediaTypes.`image/tiff`), geotiff.toByteArray))
-                } else {
-                  val png = tile.renderPng(lookupColorMap(colorMap))
-                  pngAsHttpResponse(png)
+        (pathEndOrSingleSlash & get & rejectEmptyResponse) {
+          complete(futureTool)
+        } ~
+        pathPrefix(IntNumber / IntNumber / IntNumber){ (z, x, y) =>
+          parameter(
+            'part.?,
+            'geotiff.?(false),
+            'cm.?
+          )
+          { (partId, geotiffOutput, colorMap) =>
+            complete {
+              futureTool.flatMap { tool =>
+                logger.debug(s"Raw Tool: $tool")
+                // TODO: return useful HTTP errors on parse failure
+                val ast = tool.definition.as[MapAlgebraAST] match {
+                  case Right(ast) => ast
+                  case Left(failure) => throw failure
                 }
-              }.value
-            }.value
+
+                // TODO: can we move it outside the z/x/y to get some re-use? (don't think so but should check)
+                val tms = Interpreter.tms(ast, source)
+                tms(z,x,y).map { op =>
+                  op match {
+                    case Valid(op) =>
+                      val tile = op.toTile(IntCellType).get
+                      val png = tile.renderPng(lookupColorMap(colorMap))
+                      Future.successful { pngAsHttpResponse(png) }
+                    case Invalid(errors) =>
+                      Marshal(200 -> errors.toList).to[HttpResponse]
+                  }
+                }
+              }
+            }
           }
         }
       }
