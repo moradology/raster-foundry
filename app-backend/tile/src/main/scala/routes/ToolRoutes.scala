@@ -37,6 +37,7 @@ import cats.data._
 import cats.data.Validated._
 import cats.implicits._
 
+import java.security.InvalidParameterException
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent._
 import java.util.UUID
@@ -73,52 +74,54 @@ class ToolRoutes(implicit val database: Database) extends Authentication with La
   def root(
     source: (RFMLRaster, Int, Int, Int) => Future[Option[Tile]]
   ): Route =
-    pathPrefix(Segment / Segment){ (organizationIdSegment, toolIdSegment) =>
+    pathPrefix(JavaUUID / JavaUUID){ (orgId, toolId) =>
         // TODO: check token for orgranization access
-        val orgId = UUID.fromString(organizationIdSegment)
-        println("orgId", orgId)
-        val toolId = UUID.fromString(toolIdSegment)
-        println("toolId", toolId)
         val futureTool: Future[Tool.WithRelated] = Tools.getTool(toolId).map {
           _.getOrElse(throw new java.io.IOException(toolId.toString))
         }
-        println("futureTool")
 
         (pathEndOrSingleSlash & get & rejectEmptyResponse) {
           complete(futureTool)
         } ~
         pathPrefix(IntNumber / IntNumber / IntNumber){ (z, x, y) =>
           parameter(
-            'part.?,
+            'node.?,
             'geotiff.?(false)
           )
-          { (partId, geotiffOutput) =>
-            println("params", partId, geotiffOutput)
+          { (node, geotiffOutput) =>
             complete {
-              futureTool.flatMap { tool =>
-                logger.debug(s"Raw Tool: $tool")
+              val nodeId = node.map(UUID.fromString(_))
+              for {
+                tool <- futureTool
+                maybeHist <- LayerCache.modelLayerHistogram(toolId, nodeId).value
+              } yield {
+                logger.debug(s"Tool JSON: $tool")
+
+                // Parse json to AST and select subnode if specified
                 // TODO: return useful HTTP errors on parse failure
                 val ast = tool.definition.as[MapAlgebraAST] match {
-                  case Right(ast) => ast
-                  case Left(failure) => throw failure
+                  case Right(ast) =>
+                    nodeId match {
+                      case Some(id) =>
+                        ast.find(id).getOrElse(throw new InvalidParameterException(s"AST has no node with the id $id"))
+                      case None =>
+                        ast
+                    }
+                  case Left(failure) =>
+                    throw failure
                 }
-                println(ast)
 
-                // TODO: can we move it outside the z/x/y to get some re-use? (don't think so but should check)
-                val tms = Interpreter.tms(ast, source)
-                val histogram = Interpreter.globalHistogram(ast, TileSources.cachedGlobalSource)
+                val tms = Interpreter.interpretTMS(ast, source)
 
                 for {
                   op <- tms(z, x, y)
-                  hist <- Interpreter.globalHistogram(ast, TileSources.cachedGlobalSource)
                 } yield {
                   op match {
                     case Valid(op) =>
-                      println("in op...", op)
                       try {
                         val tile = op.toTile(DoubleCellType).get
                         val colormap = geotrellis.raster.render.ColorRamps.Viridis
-                        val png = tile.renderPng(colormap.toColorMap(hist.get))
+                        val png = tile.renderPng(colormap.toColorMap(maybeHist.get))
                         Future.successful { pngAsHttpResponse(png) }
                       } catch {
                         case e: Throwable =>
