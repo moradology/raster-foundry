@@ -139,7 +139,10 @@ class ToolRoutes(implicit val database: Database) extends Authentication
               val nodeId = node.map(UUID.fromString(_))
               val colorRamp = providedRamps.get(colorRampName).getOrElse(providedRamps("viridis"))
               val responsePng: OptionT[Future, Png] = for {
-                ast   <- LayerCache.toolEvalRequirements(toolRunId, nodeId, user)
+                ast   <- nodeId match {
+                           case Some(id) => LayerCache.toolEvalRequirements(toolRunId, nodeId, user).mapFilter(_.find(id))
+                           case None => LayerCache.toolEvalRequirements(toolRunId, nodeId, user)
+                         }
                 tile  <- OptionT({
                         val literalAst: Future[Interpreted[MapAlgebraAST]] = BufferingInterpreter.literalize(ast, source, z, x, y)
                         val futureTile: Future[Interpreted[Tile]] = literalAst.map({ validatedAst =>
