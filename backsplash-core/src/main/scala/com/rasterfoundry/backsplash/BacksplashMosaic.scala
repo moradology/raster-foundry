@@ -14,23 +14,26 @@ import cats.implicits._
 import cats.data.{NonEmptyList => NEL}
 import cats.effect._
 
+
+case class BacksplashMosaic(images: fs2.Stream[IO, BacksplashMosaic], window: Extent)
+
 object BacksplashMosaic {
 
   /** Filter out images that don't need to be included  */
   def filterRelevant(bsm: BacksplashMosaic): BacksplashMosaic = {
-    var testMultiPoly: Option[MultiPolygon] = None
+    var testGeom: Option[MultiPolygon] = None
 
     bsm.filter({ bsi =>
-      testMultiPoly match {
+      testGeom match {
         case None =>
-          testMultiPoly = Some(MultiPolygon(bsi.footprint))
+          testGeom = Some(MultiPolygon(bsi.footprint))
           true
         case Some(mp) =>
-          val cond = mp.covers(bsi.footprint)
-          if (cond) {
+          val testGeomCoversImage = mp.covers(bsi.footprint)
+          if (testGeomCoversImage) {
             false
           } else {
-            testMultiPoly = (mp union bsi.footprint) match {
+            testGeom = (mp union bsi.footprint) match {
               case PolygonResult(p) => MultiPolygon(p).some
               case MultiPolygonResult(mp) => mp.some
               case _ => throw new Exception("Should get a polygon or multipolygon, instead got no result")
@@ -41,7 +44,7 @@ object BacksplashMosaic {
     })
   }
 
-  val backsplashMosaicReification = new TmsReification[BacksplashMosaic] {
+  implicit val backsplashMosaicReification = new TmsReification[BacksplashMosaic] {
     def kind(self: BacksplashMosaic): MamlKind = MamlKind.Image
 
     def tmsReification(self: BacksplashMosaic, buffer: Int)(implicit contextShift: ContextShift[IO]): (Int, Int, Int) => IO[Literal] =
@@ -86,11 +89,15 @@ object BacksplashMosaic {
 
   implicit val hasRasterExtents: HasRasterExtents[BacksplashMosaic] = new HasRasterExtents[BacksplashMosaic] {
     def rasterExtents(self: BacksplashMosaic)(implicit contextShift: ContextShift[IO]): IO[NEL[RasterExtent]] = {
-      filterRelevant(self)
+      val relevantRasterExtents = filterRelevant(self)
         .flatMap({ img => fs2.Stream.eval(BacksplashImage.getRasterExtents(img.uri)) })
         .compile
         .toList
         .map(_.reduceLeft({ (nel1: NEL[RasterExtent], nel2: NEL[RasterExtent])  => nel1 concatNel nel2 }))
+
+      relevantRasterExtents.map({ allRE =>
+        allRE.map({ re => RasterExtent(self.window, CellSize(re.cellwidth, re.cellheight)) })
+      })
     }
 
     def crs(self: BacksplashMosaic)(implicit contextShift: ContextShift[IO]): IO[CRS] = ???

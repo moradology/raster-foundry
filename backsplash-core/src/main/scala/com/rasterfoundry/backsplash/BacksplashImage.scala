@@ -41,7 +41,7 @@ object BacksplashImage extends RasterSourceUtils {
   def apply(uri: String, wkt: String, subsetBands: List[Int]): BacksplashImage =
     readWktOrWkb(wkt).as[Polygon].map { poly =>
       BacksplashImage(uri, poly, subsetBands)
-    }.getOrElse(throw new Exception("Hey, this needs to be a polygon, guy/gal"))
+    }.getOrElse(throw new Exception("Expected polygon for WKT of BacksplashImage footprint"))
 
   def getRasterExtents(uri: String): IO[NEL[RasterExtent]] = {
     val rs = getRasterSource(uri)
