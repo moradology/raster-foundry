@@ -23,10 +23,11 @@ import org.http4s.util.CaseInsensitiveString
 
 import com.rasterfoundry.backsplash.Implicits._
 import com.rasterfoundry.backsplash.Parameters._
+import com.rasterfoundry.backsplash.MetricsRegistrator
 
 import java.util.UUID
 
-object Server extends IOApp {
+object Main extends IOApp {
 
   def withCORS(svc: HttpRoutes[IO]): HttpRoutes[IO] =
     CORS(
@@ -41,14 +42,16 @@ object Server extends IOApp {
       )
     )
 
-  val mosaicService
-    : HttpRoutes[IO] = new MosaicService(SceneToProjectDao()).routes
-  val analysisService: HttpRoutes[IO] = new AnalysisService(ToolRunDao()).routes
+  val mtr = new MetricsRegistrator()
+  val mosaicService: HttpRoutes[IO] =
+    new MosaicService(SceneToProjectDao(), mtr).routes
+  val analysisService: HttpRoutes[IO] =
+    new AnalysisService(ToolRunDao(), mtr).routes
 
   val httpApp =
     Router(
-      "/" -> GZip(AutoSlash(withCORS(mosaicService))),
-      "/tools" -> GZip(AutoSlash(withCORS(analysisService)))
+      "/" -> mtr.middleware(GZip(AutoSlash(withCORS(mosaicService)))),
+      "/tools" -> mtr.middleware(GZip(AutoSlash(withCORS(analysisService))))
     )
 
   def stream =

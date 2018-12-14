@@ -21,13 +21,14 @@ import scala.concurrent.ExecutionContext
 import java.util.concurrent.Executors
 import java.lang.management.ManagementFactory
 
-class BacksplashForkingThreadPoolTimingSpec
+class MetricsRegistratorSpec
     extends FunSuite
     with Checkers
     with Matchers {
-  implicit val cs = IO.contextShift(ExecutionContext.global)
+  val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(1))
+  implicit val cs = IO.contextShift(ec)
   implicit val t = IO.timer(ExecutionContext.global)
-  val mtr = new BacksplashMetrics()
+  val mtr = new MetricsRegistrator()
 
   test("wrapped IO should take ~2 seconds") {
     val work = IO.sleep(2.seconds)
@@ -60,24 +61,3 @@ class BacksplashForkingThreadPoolTimingSpec
   }
 }
 
-class BacksplashFixedThreadPoolTimingSpec
-    extends FunSuite
-    with Checkers
-    with Matchers {
-  val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(1))
-  implicit val cs = IO.contextShift(ec)
-  implicit val t = IO.timer(ec)
-  val mtr = new BacksplashMetrics()
-
-  test("wrapped IO should take ~2 seconds") {
-    val work = IO.sleep(2.seconds)
-    val newIO = mtr.timedIO(work, classOf[BacksplashFixedThreadPoolTimingSpec], "2secs")
-    newIO.unsafeRunSync
-    val timer = mtr.registry
-      .getTimers()
-      .asScala("com.rasterfoundry.backsplash.BacksplashFixedThreadPoolTimingSpec.2secs")
-    val snapshot = timer.getSnapshot().getValues().head
-    assert(snapshot.nanoseconds.toSeconds == 2,
-           "Expected 2 second sleep to take 2 seconds...")
-  }
-}

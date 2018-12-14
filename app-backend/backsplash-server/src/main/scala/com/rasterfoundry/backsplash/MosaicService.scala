@@ -19,11 +19,13 @@ import org.http4s.util.CaseInsensitiveString
 
 import com.rasterfoundry.backsplash._
 import com.rasterfoundry.backsplash.Implicits._
+import com.rasterfoundry.backsplash.MetricsRegistrator
 
 import java.util.UUID
 
-class MosaicService[Param: ProjectStore](projects: Param)(
-    implicit cs: ContextShift[IO]) {
+class MosaicService[Param: ProjectStore](
+    projects: Param,
+    mtr: MetricsRegistrator)(implicit cs: ContextShift[IO]) {
   val routes: HttpRoutes[IO] = HttpRoutes.of {
     case GET -> Root / UUIDWrapper(projId) / IntVar(z) / IntVar(x) / IntVar(y)
           :? RedBandOptionalQueryParamMatcher(redOverride)

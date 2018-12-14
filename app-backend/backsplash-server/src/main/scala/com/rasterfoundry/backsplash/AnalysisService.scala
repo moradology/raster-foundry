@@ -13,10 +13,12 @@ import org.http4s.circe._
 
 import com.rasterfoundry.backsplash._
 import com.rasterfoundry.backsplash.Implicits._
+import com.rasterfoundry.backsplash.MetricsRegistrator
 
 @SuppressWarnings(Array("TraversableHead"))
-class AnalysisService[Param: ToolStore](analyses: Param)(
-    implicit cs: ContextShift[IO])
+class AnalysisService[Param: ToolStore](
+    analyses: Param,
+    mtr: MetricsRegistrator)(implicit cs: ContextShift[IO])
     extends BacksplashMamlAdapter {
   val routes: HttpRoutes[IO] = HttpRoutes.of {
 

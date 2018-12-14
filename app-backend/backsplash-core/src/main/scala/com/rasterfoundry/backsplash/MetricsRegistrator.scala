@@ -5,7 +5,7 @@ import org.http4s.metrics.dropwizard.Dropwizard
 import com.codahale.metrics.MetricRegistry
 import cats.effect.{IO, Clock}
 
-class BacksplashMetrics(implicit clock: Clock[IO]) {
+class MetricsRegistrator(implicit clock: Clock[IO]) {
   val registry = new MetricRegistry()
 
   val middleware = Metrics[IO](Dropwizard[IO](registry, "server")) _
