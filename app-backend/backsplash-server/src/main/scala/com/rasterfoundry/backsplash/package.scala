@@ -21,6 +21,8 @@ import java.util.UUID
 
 package object server {
 
+  type BacksplashMosaic = fs2.Stream[IO, BacksplashImage]
+
   // Without this keyencoder we can't encode the bincounts from double histograms
   implicit val encodeKeyDouble: KeyEncoder[Double] = new KeyEncoder[Double] {
     final def apply(key: Double): String = key.toString

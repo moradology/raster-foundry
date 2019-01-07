@@ -17,10 +17,9 @@ import com.rasterfoundry.tool.ast.MapAlgebraAST.{CogRaster, SceneRaster}
 import doobie.util.transactor.Transactor
 import io.circe.Json
 
-class BacksplashMamlAdapter[HistStore: HistogramStore](
-    mosaicImplicits: MosaicImplicits[HistStore],
-    xa: Transactor[IO],
-    mtr: MetricsRegistrator)
+class BacksplashMamlAdapter(mosaicImplicits: MosaicImplicits,
+                            xa: Transactor[IO],
+                            mtr: MetricsRegistrator)
     extends ProjectStoreImplicits(xa, mtr) {
   import mosaicImplicits._
 

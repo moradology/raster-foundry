@@ -26,13 +26,13 @@ import com.rasterfoundry.common.utils.TileUtils
 import doobie.util.transactor.Transactor
 import geotrellis.vector.{Polygon, Projected}
 
-class MosaicService[ProjStore: ProjectStore, HistStore: HistogramStore](
-    projects: ProjStore,
-    mtr: MetricsRegistrator,
-    mosaicImplicits: MosaicImplicits[HistStore],
-    xa: Transactor[IO])(implicit cs: ContextShift[IO],
-                        H: HttpErrorHandler[IO, BacksplashException, User],
-                        ForeignError: HttpErrorHandler[IO, Throwable, User]) {
+class MosaicService[ProjStore: ProjectStore](projects: ProjStore,
+                                             mtr: MetricsRegistrator,
+                                             mosaicImplicits: MosaicImplicits,
+                                             xa: Transactor[IO])(
+    implicit cs: ContextShift[IO],
+    H: HttpErrorHandler[IO, BacksplashException, User],
+    ForeignError: HttpErrorHandler[IO, Throwable, User]) {
 
   import mosaicImplicits._
 

@@ -13,7 +13,7 @@ import cats.effect._
 import cats.implicits._
 import com.olegpy.meow.hierarchy._
 import fs2.Stream
-import geotrellis.gdal.sgdal
+//import geotrellis.gdal.sgdal  Not working?
 import geotrellis.proj4.{LatLng, WebMercator}
 import geotrellis.raster.io.geotiff.MultibandGeoTiff
 import geotrellis.server._
@@ -34,7 +34,6 @@ import scala.concurrent.duration.FiniteDuration
 import java.util.concurrent.{Executors, TimeUnit}
 
 import com.rasterfoundry.backsplash.error._
-import com.rasterfoundry.backsplash.MosaicImplicits
 import com.rasterfoundry.backsplash.Parameters._
 import com.rasterfoundry.backsplash.MetricsRegistrator
 import java.util.UUID
@@ -47,7 +46,7 @@ import doobie.implicits._
 import doobie.postgres._
 import doobie.postgres.implicits._
 
-object Main extends IOApp with HistogramStoreImplicits with LazyLogging {
+object Main extends IOApp with LazyLogging {
 
   val dbContextShift: ContextShift[IO] = IO.contextShift(
     ExecutionContext.fromExecutor(
@@ -109,7 +108,7 @@ object Main extends IOApp with HistogramStoreImplicits with LazyLogging {
 
   val authenticators = new Authenticators(xa, mtr)
 
-  val mosaicImplicits = new MosaicImplicits(mtr, LayerAttributeDao())
+  val mosaicImplicits = new MosaicImplicits(mtr, xa)
   val toolStoreImplicits = new ToolStoreImplicits(mosaicImplicits, xa, mtr)
   import toolStoreImplicits._
 

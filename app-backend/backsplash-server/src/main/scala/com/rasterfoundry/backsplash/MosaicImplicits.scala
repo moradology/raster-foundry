@@ -1,8 +1,10 @@
-package com.rasterfoundry.backsplash
+package com.rasterfoundry.backsplash.server
 
 import com.rasterfoundry.backsplash.color._
 import com.rasterfoundry.backsplash.error._
-import com.rasterfoundry.backsplash.HistogramStore.ToHistogramStoreOps
+import com.rasterfoundry.backsplash.BacksplashImage
+import com.rasterfoundry.database.LayerAttributeDao
+
 import geotrellis.vector._
 import geotrellis.raster._
 import geotrellis.raster.histogram._
@@ -20,36 +22,38 @@ import scalacache._
 import scalacache.caffeine._
 import scalacache.memoization._
 import scalacache.CatsEffect.modes._
-import ProjectStore._
-import ToolStore._
+import doobie.Transactor
+
+import com.rasterfoundry.backsplash.ProjectStore._
+import com.rasterfoundry.backsplash.ToolStore._
+import com.rasterfoundry.backsplash.MetricsRegistrator
 import ExtentReification._
 import HasRasterExtents._
 import TmsReification._
 import com.typesafe.scalalogging.LazyLogging
 
-class MosaicImplicits[HistStore: HistogramStore](mtr: MetricsRegistrator,
-                                                 histStore: HistStore)
+class MosaicImplicits(mtr: MetricsRegistrator, xa: Transactor[IO])
     extends ToTmsReificationOps
     with ToExtentReificationOps
     with ToHasRasterExtentsOps
-    with ToHistogramStoreOps
     with ToProjectStoreOps
     with ToToolStoreOps
     with LazyLogging {
 
-  implicit val histCache = Cache.histCache
-  implicit val flags = Cache.histCacheFlags
+  implicit val histCache = com.rasterfoundry.backsplash.Cache.histCache
+  implicit val flags = com.rasterfoundry.backsplash.Cache.histCacheFlags
+  implicit val xb: Transactor[IO] = xa
 
   val readMosaicTimer =
-    mtr.newTimer(classOf[MosaicImplicits[HistStore]], "read-mosaic")
+    mtr.newTimer(classOf[MosaicImplicits], "read-mosaic")
   val readSceneTmsTimer =
-    mtr.newTimer(classOf[MosaicImplicits[HistStore]], "read-tms-scene")
+    mtr.newTimer(classOf[MosaicImplicits], "read-tms-scene")
   val readSceneExtentTimer =
-    mtr.newTimer(classOf[MosaicImplicits[HistStore]], "read-extent-scene")
+    mtr.newTimer(classOf[MosaicImplicits], "read-extent-scene")
   val readSceneHistTimer =
-    mtr.newTimer(classOf[MosaicImplicits[HistStore]], "read-scene-hist")
+    mtr.newTimer(classOf[MosaicImplicits], "read-scene-hist")
   val mbColorSceneTimer =
-    mtr.newTimer(classOf[MosaicImplicits[HistStore]], "color-multiband-scene")
+    mtr.newTimer(classOf[MosaicImplicits], "color-multiband-scene")
 
   implicit val mosaicTmsReification = new TmsReification[BacksplashMosaic] {
     def kind(self: BacksplashMosaic): MamlKind = MamlKind.Image
@@ -145,32 +149,31 @@ class MosaicImplicits[HistStore: HistogramStore](mtr: MetricsRegistrator,
             // Assume that we're in a single band case. It isn't obvious what it would
             // mean if the band count weren't 3 or 1, so just make the assumption that we
             // wouldn't do that to ourselves and don't handle the remainder
-            BacksplashMosaic.getStoreHistogram(filtered, histStore) flatMap {
-              hists =>
-                {
-                  val ioMBT = (BacksplashMosaic.filterRelevant(self) map {
-                    relevant =>
-                      println("yup in the thing")
-                      val time = readSceneTmsTimer.time()
-                      val img = relevant.read(z, x, y) map { im =>
-                        ColorRampMosaic.colorTile(
-                          im,
-                          hists,
-                          relevant.singleBandOptions getOrElse {
-                            throw SingleBandOptionsException(
-                              "Must specify single band options when requesting single band visualization.")
-                          }
-                        )
-                      }
-                      println(s"Image bands: ${img map { _.bandCount }}")
-                      time.stop()
-                      img
-                  }).collect({ case Some(mbtile) => mbtile }).compile.toList
-                  mergeTiles(ioMBT).map {
-                    case Some(t) => Raster(t, extent)
-                    case _       => Raster(ndtile, extent)
-                  }
+            BacksplashMosaic.getStoreHistogram(filtered) flatMap { hists =>
+              {
+                val ioMBT = (BacksplashMosaic.filterRelevant(self) map {
+                  relevant =>
+                    println("yup in the thing")
+                    val time = readSceneTmsTimer.time()
+                    val img = relevant.read(z, x, y) map { im =>
+                      ColorRampMosaic.colorTile(
+                        im,
+                        hists,
+                        relevant.singleBandOptions getOrElse {
+                          throw SingleBandOptionsException(
+                            "Must specify single band options when requesting single band visualization.")
+                        }
+                      )
+                    }
+                    println(s"Image bands: ${img map { _.bandCount }}")
+                    time.stop()
+                    img
+                }).collect({ case Some(mbtile) => mbtile }).compile.toList
+                mergeTiles(ioMBT).map {
+                  case Some(t) => Raster(t, extent)
+                  case _       => Raster(ndtile, extent)
                 }
+              }
             }
           }
           timedMosaic <- mtr.timedIO(mosaic, readMosaicTimer)
@@ -189,7 +192,7 @@ class MosaicImplicits[HistStore: HistogramStore](mtr: MetricsRegistrator,
   )(implicit @cacheKeyExclude flags: Flags): IO[Array[Histogram[Double]]] =
     memoizeF(None) {
       logger.debug(s"Retrieving Histograms for ${relevant.imageId} from Source")
-      histStore.layerHistogram(relevant.imageId, relevant.subsetBands)
+      BacksplashMosaic.getHistogram(relevant.imageId, relevant.subsetBands)
     }
 
 // We need to be able to pass information about whether scenes should paint themselves while
@@ -237,8 +240,8 @@ class MosaicImplicits[HistStore: HistogramStore](mtr: MetricsRegistrator,
                       }, {
                         val time = readSceneHistTimer.time()
                         val hists =
-                          histStore.layerHistogram(relevant.imageId,
-                                                   relevant.subsetBands)
+                          BacksplashMosaic.getHistogram(relevant.imageId,
+                                                        relevant.subsetBands)
                         time.stop()
                         hists
                       }
@@ -262,30 +265,29 @@ class MosaicImplicits[HistStore: HistogramStore](mtr: MetricsRegistrator,
                 })
                 .map(Raster(_, extent))
             } else {
-              BacksplashMosaic.getStoreHistogram(filtered, histStore) map {
-                layerHist =>
-                  filtered
-                    .map({ relevant =>
-                      val time = readSceneExtentTimer.time()
-                      val img = relevant.read(extent, cs) map {
-                        ColorRampMosaic
-                          .colorTile(
-                            _,
-                            layerHist,
-                            relevant.singleBandOptions getOrElse {
-                              throw SingleBandOptionsException(
-                                "Must specify single band options when requesting single band visualization.")
-                            }
-                          )
-                      }
-                      time.stop()
-                      img
-                    })
-                    .collect({ case Some(mbtile) => Raster(mbtile, extent) })
-                    .compile
-                    .fold(Raster(ndtile, extent))({ (mbr1, mbr2) =>
-                      mbr1.merge(mbr2, NearestNeighbor)
-                    })
+              BacksplashMosaic.getStoreHistogram(filtered) map { layerHist =>
+                filtered
+                  .map({ relevant =>
+                    val time = readSceneExtentTimer.time()
+                    val img = relevant.read(extent, cs) map {
+                      ColorRampMosaic
+                        .colorTile(
+                          _,
+                          layerHist,
+                          relevant.singleBandOptions getOrElse {
+                            throw SingleBandOptionsException(
+                              "Must specify single band options when requesting single band visualization.")
+                          }
+                        )
+                    }
+                    time.stop()
+                    img
+                  })
+                  .collect({ case Some(mbtile) => Raster(mbtile, extent) })
+                  .compile
+                  .fold(Raster(ndtile, extent))({ (mbr1, mbr2) =>
+                    mbr1.merge(mbr2, NearestNeighbor)
+                  })
               }
             }
             timedMosaic <- mtr.timedIO(mosaic, readMosaicTimer)

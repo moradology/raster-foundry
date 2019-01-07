@@ -17,10 +17,9 @@ import doobie.implicits._
 
 import java.util.UUID
 
-class ToolStoreImplicits[HistStore: HistogramStore](
-    mosaicImplicits: MosaicImplicits[HistStore],
-    xa: Transactor[IO],
-    mtr: MetricsRegistrator)
+class ToolStoreImplicits(mosaicImplicits: MosaicImplicits,
+                         xa: Transactor[IO],
+                         mtr: MetricsRegistrator)
     extends ProjectStoreImplicits(xa, mtr) {
   import mosaicImplicits._
 

@@ -17,17 +17,6 @@ import DefaultJsonProtocol._
 
 import java.util.UUID
 
-case class LayerAttributeDao() {
-  def getHistogram[T: JsonFormat](layerId: UUID, xa: Transactor[IO]): IO[T] = {
-    LayerAttributeDao
-      .unsafeGetAttribute(LayerId(layerId.toString, 0), "histogram")
-      .transact(xa)
-      .map({ attr =>
-        attr.value.noSpaces.parseJson.convertTo[T]
-      })
-  }
-}
-
 object LayerAttributeDao extends Dao[LayerAttribute] {
 
   val tableName = "layer_attributes"

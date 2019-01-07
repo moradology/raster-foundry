@@ -1,25 +1,41 @@
-package com.rasterfoundry.backsplash
+package com.rasterfoundry.backsplash.server
 
-import geotrellis.vector._
-import geotrellis.raster._
-import geotrellis.raster.histogram._
-import geotrellis.raster.resample.NearestNeighbor
-import geotrellis.proj4.CRS
-import geotrellis.server._
+import java.util.UUID
 
 import com.azavea.maml.ast._
 import com.azavea.maml.eval._
-
 import cats._
 import cats.implicits._
 import cats.data.{NonEmptyList => NEL}
 import cats.data.Validated._
 import cats.effect._
+import doobie.Transactor
+import doobie.implicits._
+import geotrellis.vector._
+import geotrellis.raster._
+import geotrellis.raster.histogram._
+import geotrellis.raster.io.json.HistogramJsonFormats
+import geotrellis.raster.resample.NearestNeighbor
+import geotrellis.proj4.CRS
+import geotrellis.server._
+import geotrellis.spark.LayerId
+import spray.json._
+import spray.json.DefaultJsonProtocol._
 
 import com.rasterfoundry.backsplash.error._
-import com.rasterfoundry.backsplash.HistogramStore.ToHistogramStoreOps
+import com.rasterfoundry.database.LayerAttributeDao
 
-object BacksplashMosaic extends ToHistogramStoreOps {
+object BacksplashMosaic extends HistogramJsonFormats {
+
+  def getHistogram(layerId: UUID, subsetBands: List[Int])(
+      implicit xa: Transactor[IO]): IO[Array[Histogram[Double]]] = {
+    LayerAttributeDao
+      .unsafeGetAttribute(LayerId(layerId.toString, 0), "histogram")
+      .transact(xa)
+      .map({ attr =>
+        attr.value.noSpaces.parseJson.convertTo[Array[Histogram[Double]]]
+      })
+  }
 
   /** Filter out images that don't need to be included  */
   def filterRelevant(bsm: BacksplashMosaic): BacksplashMosaic = {
@@ -55,15 +71,15 @@ object BacksplashMosaic extends ToHistogramStoreOps {
     LayerHistogram.identity(mosaic, 4000)
   }
 
-  def getStoreHistogram[T: HistogramStore](mosaic: BacksplashMosaic,
-                                           histStore: T)(
+  def getStoreHistogram(mosaic: BacksplashMosaic)(
       implicit hasRasterExtents: HasRasterExtents[BacksplashMosaic],
       extentReification: ExtentReification[BacksplashMosaic],
-      cs: ContextShift[IO]): IO[List[Histogram[Double]]] =
+      cs: ContextShift[IO],
+      xa: Transactor[IO]): IO[List[Histogram[Double]]] =
     for {
       allImages <- filterRelevant(mosaic).compile.toList
       histArrays <- allImages traverse { im =>
-        histStore.layerHistogram(im.imageId, im.subsetBands)
+        getHistogram(im.imageId, im.subsetBands)
       }
       result <- histArrays match {
         case Nil =>
