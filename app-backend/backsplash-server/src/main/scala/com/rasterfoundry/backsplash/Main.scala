@@ -74,9 +74,6 @@ object Main extends IOApp with LazyLogging {
 
   val mtr = new MetricsRegistrator()
 
-  val projectStoreImplicits = new ProjectStoreImplicits(xa, mtr)
-  import projectStoreImplicits.projectStore
-
   val timeout: FiniteDuration =
     new FiniteDuration(Config.server.timeoutSeconds, TimeUnit.SECONDS)
 
@@ -109,21 +106,14 @@ object Main extends IOApp with LazyLogging {
   val authenticators = new Authenticators(xa, mtr)
 
   val mosaicImplicits = new MosaicImplicits(mtr, xa)
-  val toolStoreImplicits = new ToolStoreImplicits(mosaicImplicits, xa, mtr)
-  import toolStoreImplicits._
 
   val mosaicService: HttpRoutes[IO] =
-    authenticators.tokensAuthMiddleware(AuthedAutoSlash(
-      new MosaicService(SceneToProjectDao(), mtr, mosaicImplicits, xa).routes))
+    authenticators.tokensAuthMiddleware(
+      AuthedAutoSlash(new MosaicService(mtr, mosaicImplicits, xa).routes))
 
   val analysisService: HttpRoutes[IO] =
     authenticators.tokensAuthMiddleware(
-      AuthedAutoSlash(
-        new AnalysisService(ToolRunDao(),
-                            mtr,
-                            mosaicImplicits,
-                            toolStoreImplicits,
-                            xa).routes))
+      AuthedAutoSlash(new AnalysisService(mosaicImplicits, xa).routes))
 
   val httpApp =
     Router(

@@ -1,7 +1,8 @@
 package com.rasterfoundry.backsplash.server
 
+import geotrellis.server._
+
 import com.rasterfoundry.backsplash._
-import com.rasterfoundry.backsplash.ProjectStore.ToProjectStoreOps
 import com.rasterfoundry.backsplash.color._
 import com.rasterfoundry.backsplash.error._
 import com.rasterfoundry.database.Implicits._
@@ -17,13 +18,7 @@ import doobie.implicits._
 
 import java.util.UUID
 
-class ToolStoreImplicits(mosaicImplicits: MosaicImplicits,
-                         xa: Transactor[IO],
-                         mtr: MetricsRegistrator)
-    extends ProjectStoreImplicits(xa, mtr) {
-  import mosaicImplicits._
-
-  val mamlAdapter = new BacksplashMamlAdapter(mosaicImplicits, xa, mtr)
+object ToolStore {
 
   private def toolToColorRd(toolRd: tool.RenderDefinition): RenderDefinition = {
     val scaleOpt = toolRd.scale match {
@@ -43,8 +38,8 @@ class ToolStoreImplicits(mosaicImplicits: MosaicImplicits,
     RenderDefinition(toolRd.breakpoints, scaleOpt, clipOpt)
   }
 
-  private def unsafeGetAST(analysisId: UUID,
-                           nodeId: Option[UUID]): IO[MapAlgebraAST] =
+  private def unsafeGetAST(analysisId: UUID, nodeId: Option[UUID])(
+      implicit xa: Transactor[IO]): IO[MapAlgebraAST] =
     (for {
       executionParams <- ToolRunDao.query.filter(analysisId).select map {
         _.executionParameters
@@ -63,20 +58,18 @@ class ToolStoreImplicits(mosaicImplicits: MosaicImplicits,
       } getOrElse { decoded }
     }).transact(xa)
 
-  implicit val toolRunDaoStore: ToolStore[ToolRunDao] =
-    new ToolStore[ToolRunDao] {
-      def read(self: ToolRunDao,
-               analysisId: UUID,
-               nodeId: Option[UUID]): IO[PaintableTool] =
-        for {
-          (expr, mdOption, params) <- unsafeGetAST(analysisId, nodeId) map {
-            mamlAdapter.asMaml _
-          }
-        } yield {
-          PaintableTool(expr, params, mdOption flatMap {
-            _.renderDef map { toolToColorRd(_) }
-          })
-        }
+  def getTool(analysisId: UUID, nodeId: Option[UUID])(
+      implicit xa: Transactor[IO],
+      tmsReification: TmsReification[BacksplashMosaic],
+      extentReification: ExtentReification[BacksplashMosaic],
+      hasRasterExtents: HasRasterExtents[BacksplashMosaic]): IO[PaintableTool] =
+    for {
+      (expr, mdOption, params) <- unsafeGetAST(analysisId, nodeId) map {
+        BacksplashMamlAdapter.asMaml _
+      }
+    } yield {
+      val renderDef = mdOption.flatMap { _.renderDef.map(toolToColorRd) }
+      PaintableTool(expr, params, renderDef)
     }
 
 }

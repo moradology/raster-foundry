@@ -22,18 +22,13 @@ import com.rasterfoundry.backsplash.color.{Implicits => ColorImplicits}
 import doobie.util.transactor.Transactor
 
 @SuppressWarnings(Array("TraversableHead"))
-class AnalysisService[Param: ToolStore](analyses: Param,
-                                        mtr: MetricsRegistrator,
-                                        mosaicImplicits: MosaicImplicits,
-                                        toolstoreImplicits: ToolStoreImplicits,
-                                        xa: Transactor[IO])(
+class AnalysisService(mosaicImplicits: MosaicImplicits, xa: Transactor[IO])(
     implicit cs: ContextShift[IO],
     H: HttpErrorHandler[IO, BacksplashException, User],
     ForeignError: HttpErrorHandler[IO, Throwable, User])
     extends ColorImplicits {
 
   import mosaicImplicits._
-  import toolstoreImplicits._
 
   private val pngType = `Content-Type`(MediaType.image.png)
   private val tiffType = `Content-Type`(MediaType.image.tiff)
@@ -47,7 +42,7 @@ class AnalysisService[Param: ToolStore](analyses: Param,
               :? VoidCacheQueryParamMatcher(void) as user =>
           for {
             authFiber <- authorizers.authToolRun(user, analysisId).start
-            paintableFiber <- analyses.read(analysisId, node).start
+            paintableFiber <- ToolStore.getTool(analysisId, node).start
             _ <- authFiber.join.handleErrorWith { error =>
               paintableFiber.cancel *> IO.raiseError(error)
             }
@@ -66,7 +61,7 @@ class AnalysisService[Param: ToolStore](analyses: Param,
               :? NodeQueryParamMatcher(node) as user =>
           for {
             authFiber <- authorizers.authToolRun(user, analysisId).start
-            paintableFiber <- analyses.read(analysisId, node).start
+            paintableFiber <- ToolStore.getTool(analysisId, node).start
             _ <- authFiber.join.handleErrorWith { error =>
               paintableFiber.cancel *> IO.raiseError(error)
             }
@@ -101,7 +96,7 @@ class AnalysisService[Param: ToolStore](analyses: Param,
             }
           for {
             authFiber <- authorizers.authToolRun(user, analysisId).start
-            paintableFiber <- analyses.read(analysisId, node).start
+            paintableFiber <- ToolStore.getTool(analysisId, node).start
             _ <- authFiber.join.handleErrorWith { error =>
               paintableFiber.cancel *> IO.raiseError(error)
             }

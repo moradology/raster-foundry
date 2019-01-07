@@ -17,13 +17,9 @@ import com.rasterfoundry.tool.ast.MapAlgebraAST.{CogRaster, SceneRaster}
 import doobie.util.transactor.Transactor
 import io.circe.Json
 
-class BacksplashMamlAdapter(mosaicImplicits: MosaicImplicits,
-                            xa: Transactor[IO],
-                            mtr: MetricsRegistrator)
-    extends ProjectStoreImplicits(xa, mtr) {
-  import mosaicImplicits._
+object BacksplashMamlAdapter {
 
-  def asMaml(ast: MapAlgebraAST)
+  def asMaml(ast: MapAlgebraAST)(implicit xa: Transactor[IO])
     : (Expression, Option[NodeMetadata], Map[String, BacksplashMosaic]) = {
 
     def evalParams(ast: MapAlgebraAST): Map[String, BacksplashMosaic] = {
@@ -43,13 +39,12 @@ class BacksplashMamlAdapter(mosaicImplicits: MosaicImplicits,
             "Up")
           Map[String, BacksplashMosaic](
             s"${projId.toString}_${bandActual}" -> (
-              SceneToProjectDao()
-                .read(
-                  projId,
-                  None,
-                  None,
-                  None
-                ) map { backsplashIm =>
+              ProjectStore.getProject(
+                projId,
+                None,
+                None,
+                None
+              ) map { backsplashIm =>
                 backsplashIm.copy(subsetBands = List(bandActual))
               }
             )

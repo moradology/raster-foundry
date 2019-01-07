@@ -26,10 +26,9 @@ import com.rasterfoundry.common.utils.TileUtils
 import doobie.util.transactor.Transactor
 import geotrellis.vector.{Polygon, Projected}
 
-class MosaicService[ProjStore: ProjectStore](projects: ProjStore,
-                                             mtr: MetricsRegistrator,
-                                             mosaicImplicits: MosaicImplicits,
-                                             xa: Transactor[IO])(
+class MosaicService(mtr: MetricsRegistrator,
+                    mosaicImplicits: MosaicImplicits,
+                    xa: Transactor[IO])(
     implicit cs: ContextShift[IO],
     H: HttpErrorHandler[IO, BacksplashException, User],
     ForeignError: HttpErrorHandler[IO, Throwable, User]) {
@@ -58,7 +57,8 @@ class MosaicService[ProjStore: ProjectStore](projects: ProjStore,
               TileUtils.getTileBounds(z, x, y)
             val eval =
               LayerTms.identity(
-                projects.read(projectId, Some(polygonBbox), bandOverride, None))
+                ProjectStore
+                  .getProject(projectId, Some(polygonBbox), bandOverride, None))
             for {
               fiberAuth <- authorizers.authProject(user, projectId).start
               fiberResp <- eval(z, x, y).start
@@ -76,7 +76,7 @@ class MosaicService[ProjStore: ProjectStore](projects: ProjStore,
           case GET -> Root / UUIDWrapper(projectId) / "histogram" as user =>
             for {
               authFiber <- authorizers.authProject(user, projectId).start
-              mosaic = projects.read(projectId, None, None, None)
+              mosaic = ProjectStore.getProject(projectId, None, None, None)
               histFiber <- LayerHistogram.identity(mosaic, 4000).start
               _ <- authFiber.join.handleErrorWith { error =>
                 histFiber.cancel *> IO.raiseError(error)
@@ -107,10 +107,10 @@ class MosaicService[ProjStore: ProjectStore](projects: ProjStore,
                     }
                   for {
                     authFiber <- authorizers.authProject(user, projectId).start
-                    mosaic = projects.read(projectId,
-                                           None,
-                                           overrides,
-                                           uuids.toNel)
+                    mosaic = ProjectStore.getProject(projectId,
+                                                     None,
+                                                     overrides,
+                                                     uuids.toNel)
                     histFiber <- LayerHistogram.identity(mosaic, 4000).start
                     _ <- authFiber.join.handleErrorWith { error =>
                       histFiber.cancel *> IO.raiseError(error)
@@ -143,12 +143,12 @@ class MosaicService[ProjStore: ProjectStore](projects: ProjStore,
             val eval =
               if (toPaint) {
                 LayerExtent.identity(
-                  projects.read(projectId, None, bandOverride, None))(
+                  ProjectStore.getProject(projectId, None, bandOverride, None))(
                   paintedMosaicExtentReification,
                   cs)
               } else {
                 LayerExtent.identity(
-                  projects.read(projectId, None, bandOverride, None))(
+                  ProjectStore.getProject(projectId, None, bandOverride, None))(
                   rawMosaicExtentReification,
                   cs)
               }

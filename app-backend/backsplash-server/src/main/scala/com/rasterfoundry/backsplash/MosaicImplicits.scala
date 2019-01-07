@@ -24,7 +24,6 @@ import scalacache.memoization._
 import scalacache.CatsEffect.modes._
 import doobie.Transactor
 
-import com.rasterfoundry.backsplash.ProjectStore._
 import com.rasterfoundry.backsplash.ToolStore._
 import com.rasterfoundry.backsplash.MetricsRegistrator
 import ExtentReification._
@@ -36,7 +35,6 @@ class MosaicImplicits(mtr: MetricsRegistrator, xa: Transactor[IO])
     extends ToTmsReificationOps
     with ToExtentReificationOps
     with ToHasRasterExtentsOps
-    with ToProjectStoreOps
     with ToToolStoreOps
     with LazyLogging {
 
